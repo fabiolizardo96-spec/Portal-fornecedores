@@ -616,6 +616,8 @@ function EstadoVazioIlustracao({ mensagem }: { mensagem: string }) {
 
 function OperacoesConteudo() {
   const searchParams = useSearchParams();
+  const perfilParam = searchParams.get("perfil");
+  const usuarioParam = searchParams.get("usuario");
   const inicialId = searchParams.get("fornecedorId") || FORNECEDORES_OP[0].id;
   const inicialAba =
     searchParams.get("aba") === "contato" ? "contato" : "orcamento";
@@ -1194,11 +1196,42 @@ function OperacoesConteudo() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      {/* Faixa de integração com a página inicial da Atlas Supply & Comércio */}
+      <div className="bg-stone-950 text-stone-200 border-b border-stone-800 px-6 py-2.5 text-xs">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="font-bold text-amber-400">
+              Atlas Supply &amp; Comércio
+            </span>
+            <span className="text-stone-600">•</span>
+            <span className="px-2 py-0.5 rounded bg-stone-800 text-amber-200 font-medium">
+              {perfilParam === "colaborador"
+                ? "Perfil: Colaborador (Mesa de Compras)"
+                : perfilParam === "fornecedor"
+                  ? "Perfil: Fornecedor Parceiro"
+                  : "Acesso direto à Operação"}
+            </span>
+            {usuarioParam && (
+              <span className="text-stone-300 hidden sm:inline">
+                ({usuarioParam})
+              </span>
+            )}
+          </div>
+
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-medium underline underline-offset-4"
+          >
+            ← Voltar para a página inicial
+          </Link>
+        </div>
+      </div>
+
       <header className="bg-slate-900 text-white border-b border-slate-800 px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-              Operações de Compras & Fiscal
+              Operações de Compras &amp; Fiscal
             </span>
             <h1 className="text-xl font-bold">
               Orçamentos com Impostos, Comprovante e Reuniões
