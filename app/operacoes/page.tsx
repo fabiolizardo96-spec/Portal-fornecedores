@@ -2286,14 +2286,35 @@ function OperacoesConteudo() {
                       </div>
 
                       {orc.alcadaAprovacao && (
-                        <div className="bg-amber-50/80 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-950 space-y-0.5">
+                        <div
+                          className={`rounded-lg px-3 py-2 text-xs space-y-0.5 border ${
+                            orc.numeroPO
+                              ? "bg-slate-50 border-slate-200 text-slate-800"
+                              : orc.etapaFluxo === "Reprovado"
+                              ? "bg-rose-50/80 border-rose-200 text-rose-950"
+                              : "bg-amber-50/80 border-amber-200 text-amber-950"
+                          }`}
+                        >
                           <p>
                             <strong>Requisição {orc.numeroRequisicao}:</strong>{" "}
-                            Aprovação em andamento • Responsáveis:{" "}
+                            {orc.numeroPO
+                              ? "Aprovação concluída"
+                              : orc.etapaFluxo === "Reprovado"
+                              ? "Devolvida / Reprovada"
+                              : "Aprovação em andamento"}{" "}
+                            • Responsáveis:{" "}
                             <strong>{orc.alcadaAprovacao}</strong>
                           </p>
                           {orc.requisicaoGeradaEm && (
-                            <p className="text-[11px] text-amber-800">
+                            <p
+                              className={`text-[11px] ${
+                                orc.numeroPO
+                                  ? "text-slate-600"
+                                  : orc.etapaFluxo === "Reprovado"
+                                  ? "text-rose-800"
+                                  : "text-amber-800"
+                              }`}
+                            >
                               Aberta em {orc.requisicaoGeradaEm}
                             </p>
                           )}
