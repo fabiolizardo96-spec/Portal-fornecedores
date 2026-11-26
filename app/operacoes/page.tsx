@@ -1,1279 +1,1217 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-interface ItemOfertado {
+type PerfilOperacao = "adm" | "colaborador" | "fornecedor";
+
+type EtapaFluxoCompra =
+  | "Orcamento Criado"
+  | "Em Aprovacao (REQ)"
+  | "PO Emitida (Aprovado)"
+  | "Reprovado"
+  | "Cancelado";
+
+interface ItemFornecedor {
+  id: string;
   nome: string;
-  tipo: "Produto" | "Serviço";
-  valorOfertado: number;
+  ncm: string;
+  precoUnitario: number;
   unidade: string;
-  prazoServico: string;
-  pedidoMinimo: string;
-  ncmOuCodigo: string;
-  icmsPadrao: number;
-  ipiPadrao: number;
-  pisCofinsPadrao: number;
-  issPadrao: number;
+  pedidoMinimo: number;
+  prazoEntrega: string;
 }
 
-interface FornecedorResumo {
+interface Fornecedor {
   id: string;
-  nomeFantasia: string;
-  cnpj: string;
-  estado: string;
-  regimeTributario: "Lucro Real" | "Lucro Presumido" | "Simples Nacional";
+  sigla: string;
+  corBadge: string;
+  nome: string;
+  razaoSocial: string;
+  uf: string;
+  cidade: string;
   categoria: string;
-  contatoComercial: string;
-  emailComercial: string;
+  porte: string;
+  regimeTributario: "Lucro Real" | "Lucro Presumido" | "Simples Nacional";
+  cnpj: string;
+  contratoStatus: string;
+  ndaStatus: string;
+  slaEntrega: string;
+  contatoNome: string;
+  contatoEmail: string;
   chavePix: string;
   contaBancaria: string;
-  prazoPagamentoPadrao:
-    | "30 dias"
-    | "45 dias"
-    | "60 dias"
-    | "Imediato"
-    | "Transferência Bancária"
-    | "Parcelado";
-  pedidoMinimoGeral: string;
-  tempoServico: string;
-  ndaStatus: "Assinado" | "Pendente";
-  contratoStatus: "Vigente" | "Pendente";
-  itensOfertados: ItemOfertado[];
+  itens: ItemFornecedor[];
 }
 
-interface OrcamentoCriado {
+interface OrcamentoRegistro {
   id: string;
-  statusPedido: "Ativo" | "Cancelado";
-  canceladoEm?: string;
   fornecedorId: string;
   fornecedorNome: string;
-  categoriaFornecedor?: string;
-  cnpjFornecedor: string;
-  emailDestino: string;
-  chavePix: string;
-  contaBancaria: string;
-  regimeTributario: string;
   itemNome: string;
-  ncmOuCodigo: string;
+  ncm: string;
   quantidade: number;
   descontoPercentual: number;
-  pedidoMinimoTexto: string;
-  abaixoDoMinimo: boolean;
-  evidenciaMinimoNome: string | null;
-  evidenciaMinimoUrl: string | null;
-  subtotalMercadoria: number;
-  modalidadeImposto: "inclusos" | "por_fora";
-  aliquotas: {
-    icms: number;
-    ipi: number;
-    pisCofins: number;
-    iss: number;
-    difalSt: number;
-  };
-  resumoImpostos: string;
-  totalImpostos: number;
-  creditoTributarioEstimado: number;
-  valorTotalNota: number;
-  custoLiquidoEfetivo: number;
-  modalidadeCompra: "Pedido Avulso" | "Contrato";
+  modalidade: string;
   prazoPagamento: string;
+  modoImposto: "por_fora" | "incluso";
+  icms: number;
+  ipi: number;
+  pisCofins: number;
+  iss: number;
+  difalSt: number;
+  subtotal: number;
+  cargaTributaria: number;
+  creditoEstimado: number;
+  totalNf: number;
+  custoLiquido: number;
   comprovanteNome: string | null;
-  comprovanteTamanhoKb: number | null;
-  comprovanteUrl: string | null;
-  envioAutomaticoAtivo: boolean;
-  statusEnvioComprovante:
-    | "Enviado automaticamente ao fornecedor"
-    | "Comprovante anexado (aguardando envio)"
-    | "Sem comprovante anexado";
+  enviadoEmail: boolean;
   observacoes: string;
+  etapaFluxo: EtapaFluxoCompra;
+  numeroRequisicao?: string;
+  alcadaAprovacao?: string;
+  requisicaoGeradaEm?: string;
+  numeroPO?: string;
+  aprovadoPor?: string;
+  poEmitidaEm?: string;
+  motivoReprovacao?: string;
+  contestacaoFornecedor?: {
+    motivo: string;
+    detalhes: string;
+    registradoEm: string;
+  };
+  origem: "ADM & Owner" | "Mesa de Compras";
   criadoEm: string;
 }
 
-interface RegistroContato {
+interface MensagemRegistro {
   id: string;
-  tipo: "Mensagem" | "Reunião";
-  etapaProcesso: string;
+  fornecedorId: string;
   fornecedorNome: string;
-  destinatario: string;
-  emailDestino: string;
-  assuntoOuData: string;
-  detalhes: string;
+  remetente: string;
+  tipo: "Mensagem" | "Solicitação de Reunião" | "Contestação" | "Ajuda";
+  assunto: string;
+  dataReuniao?: string;
+  conteudo: string;
   criadoEm: string;
 }
 
-const PRAZOS_PAGAMENTO_OPCOES = [
-  "30 dias",
-  "45 dias",
-  "60 dias",
-  "Imediato",
-  "Transferência Bancária",
-  "Parcelado",
-] as const;
+const COLABORADOR_RESPONSAVEL = {
+  nome: "Lucas Andrade — Comprador Pleno (Atlas Supply)",
+  email: "compras@atlassupply-exemplo.com.br",
+  ramal: "(11) 4000-8920 • Ramal 204",
+};
 
-const STORAGE_KEY_ORCAMENTOS = "portal_compras_orcamentos_v1";
-const STORAGE_KEY_CONTATOS = "portal_compras_contatos_v1";
-
-const FORNECEDORES_OP: FornecedorResumo[] = [
+const TEMA_POR_PERFIL: Record<
+  PerfilOperacao,
   {
-    id: "1",
-    nomeFantasia: "PackSul Embalagens Industriais",
-    cnpj: "12.345.678/0001-90",
-    estado: "SP",
+    imagemFundo: string;
+    altFundo: string;
+    overlayHeader: string;
+    overlayPagina: string;
+    bordaDestaque: string;
+  }
+> = {
+  adm: {
+    imagemFundo: "/images/parceria-comercial.jpg",
+    altFundo: "Ambiente executivo e governança Atlas Supply",
+    overlayHeader:
+      "bg-gradient-to-r from-stone-950/95 via-stone-900/85 to-amber-950/80",
+    overlayPagina: "bg-stone-100/90",
+    bordaDestaque: "border-amber-500/40",
+  },
+  colaborador: {
+    imagemFundo: "/images/acesso-colaborador.jpg",
+    altFundo: "Mesa de compras e negociação com fornecedores",
+    overlayHeader:
+      "bg-gradient-to-r from-slate-950/95 via-slate-900/85 to-blue-950/80",
+    overlayPagina: "bg-slate-100/88",
+    bordaDestaque: "border-blue-500/40",
+  },
+  fornecedor: {
+    imagemFundo: "/images/acesso-fornecedor.jpg",
+    altFundo: "Operação comercial e abastecimento do fornecedor parceiro",
+    overlayHeader:
+      "bg-gradient-to-r from-emerald-950/95 via-slate-950/85 to-teal-950/80",
+    overlayPagina: "bg-emerald-50/88",
+    bordaDestaque: "border-emerald-500/40",
+  },
+};
+
+const FORNECEDORES_INICIAIS: Fornecedor[] = [
+  {
+    id: "packs-sp",
+    sigla: "PE",
+    corBadge: "bg-emerald-700",
+    nome: "PackSul Embalagens Industriais",
+    razaoSocial: "PackSul Embalagens Ltda",
+    uf: "SP",
+    cidade: "Guarulhos",
+    categoria: "Embalagens & Manufatura",
+    porte: "Escala Industrial",
     regimeTributario: "Lucro Real",
-    categoria: "Embalagens",
-    contatoComercial: "Mariana Costa (Executiva de Contas)",
-    emailComercial: "mariana.costa@packsul-exemplo.com.br",
+    cnpj: "12.345.678/0001-90",
+    contratoStatus: "Vigente",
+    ndaStatus: "Assinado",
+    slaEntrega: "5 dias úteis",
+    contatoNome: "Mariana Costa",
+    contatoEmail: "mariana.costa@packsul-exemplo.com.br",
     chavePix: "12.345.678/0001-90 (CNPJ)",
     contaBancaria:
       "Banco Itaú (341) • Ag. 0421 • C/C 78412-9 • Titular: PackSul Embalagens Ltda (CNPJ 12.345.678/0001-90)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "R$ 2.500,00 / 1.000 un.",
-    tempoServico: "5 dias úteis (SLA de entrega)",
-    ndaStatus: "Assinado",
-    contratoStatus: "Vigente",
-    itensOfertados: [
+    itens: [
       {
+        id: "pk-1",
         nome: "Caixa Papelão Ondulado ON2 (60x40x40cm)",
-        tipo: "Produto",
-        valorOfertado: 6.8,
-        unidade: "por unidade",
-        prazoServico: "5 dias úteis",
-        pedidoMinimo: "1.000 unidades",
-        ncmOuCodigo: "NCM 4819.10.00",
-        icmsPadrao: 18,
-        ipiPadrao: 5,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 0,
+        ncm: "4819.10.00",
+        precoUnitario: 6.8,
+        unidade: "un.",
+        pedidoMinimo: 1000,
+        prazoEntrega: "5 dias úteis",
       },
       {
-        nome: "Desenvolvimento de Embalagem Sob Medida + Protótipo",
-        tipo: "Serviço",
-        valorOfertado: 1250.0,
-        unidade: "por projeto",
-        prazoServico: "7 dias úteis",
-        pedidoMinimo: "1 projeto",
-        ncmOuCodigo: "LC 116 - Item 23.01",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 5,
+        id: "pk-2",
+        nome: "Filme Stretch Industrial 500mm x 25micras",
+        ncm: "3920.10.99",
+        precoUnitario: 48.5,
+        unidade: "bobina",
+        pedidoMinimo: 120,
+        prazoEntrega: "4 dias úteis",
       },
     ],
   },
   {
-    id: "2",
-    nomeFantasia: "Cartonagem Vale Verde",
+    id: "agrovale-mg",
+    sigla: "AV",
+    corBadge: "bg-amber-700",
+    nome: "AgroVale Cooperativa & Grãos",
+    razaoSocial: "Cooperativa AgroVale do Cerrado Ltda",
+    uf: "MG",
+    cidade: "Uberlândia",
+    categoria: "Agro & Alimentos",
+    porte: "Médio Porte / Cooperativa",
+    regimeTributario: "Lucro Real",
     cnpj: "23.456.789/0001-12",
-    estado: "SP",
+    contratoStatus: "Vigente",
+    ndaStatus: "Assinado",
+    slaEntrega: "7 dias úteis",
+    contatoNome: "Ricardo Nogueira",
+    contatoEmail: "comercial@agrovale-exemplo.com.br",
+    chavePix: "23.456.789/0001-12 (CNPJ)",
+    contaBancaria:
+      "Banco do Brasil (001) • Ag. 3120-4 • C/C 44190-2 • Titular: Cooperativa AgroVale do Cerrado Ltda",
+    itens: [
+      {
+        id: "ag-1",
+        nome: "Milho Amarelo Tipo 1 — Saca 60kg (Lote Industrial)",
+        ncm: "1005.90.10",
+        precoUnitario: 74.0,
+        unidade: "saca",
+        pedidoMinimo: 250,
+        prazoEntrega: "7 dias úteis",
+      },
+      {
+        id: "ag-2",
+        nome: "Café Arábica Torrado Grão Exportação — Saca 60kg",
+        ncm: "0901.21.00",
+        precoUnitario: 1180.0,
+        unidade: "saca",
+        pedidoMinimo: 30,
+        prazoEntrega: "10 dias úteis",
+      },
+    ],
+  },
+  {
+    id: "metalprime-pr",
+    sigla: "MP",
+    corBadge: "bg-slate-800",
+    nome: "MetalPrime Componentes & Aço",
+    razaoSocial: "MetalPrime Usinagem Industrial S.A.",
+    uf: "PR",
+    cidade: "Curitiba",
+    categoria: "Insumos Industriais",
+    porte: "Escala Industrial",
+    regimeTributario: "Lucro Real",
+    cnpj: "34.567.890/0001-45",
+    contratoStatus: "Vigente",
+    ndaStatus: "Assinado",
+    slaEntrega: "8 dias úteis",
+    contatoNome: "Eng. Henrique Dias",
+    contatoEmail: "vendas@metalprime-exemplo.com.br",
+    chavePix: "34.567.890/0001-45 (CNPJ)",
+    contaBancaria:
+      "Bradesco (237) • Ag. 1890 • C/C 90211-4 • Titular: MetalPrime Usinagem Industrial S.A.",
+    itens: [
+      {
+        id: "mp-1",
+        nome: "Chapa de Aço Carbono SAE 1020 (3,0mm)",
+        ncm: "7208.52.00",
+        precoUnitario: 310.0,
+        unidade: "chapa",
+        pedidoMinimo: 50,
+        prazoEntrega: "8 dias úteis",
+      },
+      {
+        id: "mp-2",
+        nome: "Kit Fixadores Inox Linha Pesada (100 peças)",
+        ncm: "7318.15.00",
+        precoUnitario: 89.9,
+        unidade: "kit",
+        pedidoMinimo: 100,
+        prazoEntrega: "5 dias úteis",
+      },
+    ],
+  },
+  {
+    id: "atlantico-sc",
+    sigla: "AC",
+    corBadge: "bg-sky-800",
+    nome: "Atlântico Comex & Logística Portuária",
+    razaoSocial: "Atlântico Operações Aduaneiras Ltda",
+    uf: "SC",
+    cidade: "Itajaí",
+    categoria: "Comex & Logística",
+    porte: "Operador Internacional",
+    regimeTributario: "Lucro Presumido",
+    cnpj: "45.678.901/0001-77",
+    contratoStatus: "Vigente",
+    ndaStatus: "Assinado",
+    slaEntrega: "3 dias úteis",
+    contatoNome: "Beatriz Ramos",
+    contatoEmail: "comex@atlanticoport-exemplo.com.br",
+    chavePix: "45.678.901/0001-77 (CNPJ)",
+    contaBancaria:
+      "Santander (033) • Ag. 2214 • C/C 1300492-8 • Titular: Atlântico Operações Aduaneiras Ltda",
+    itens: [
+      {
+        id: "ac-1",
+        nome: "Desembaraço Aduaneiro & Agenciamento Container 40' HC",
+        ncm: "0000.00.00",
+        precoUnitario: 4250.0,
+        unidade: "processo",
+        pedidoMinimo: 1,
+        prazoEntrega: "3 dias úteis",
+      },
+      {
+        id: "ac-2",
+        nome: "Frete Rodoviário Dedicado Porto Itajaí → CD SP",
+        ncm: "0000.00.00",
+        precoUnitario: 5900.0,
+        unidade: "viagem",
+        pedidoMinimo: 1,
+        prazoEntrega: "2 dias úteis",
+      },
+    ],
+  },
+  {
+    id: "hortifrut-sp",
+    sigla: "HF",
+    corBadge: "bg-teal-700",
+    nome: "Sítio Boa Esperança — Produtor Local",
+    razaoSocial: "Associação Rural Boa Esperança ME",
+    uf: "SP",
+    cidade: "Ibiúna",
+    categoria: "Agro & Alimentos",
+    porte: "Micro / Pequeno Produtor",
     regimeTributario: "Simples Nacional",
-    categoria: "Embalagens",
-    contatoComercial: "Lucas Ferreira (Comercial)",
-    emailComercial: "lucas.ferreira@valeverdepack-exemplo.com.br",
-    chavePix: "financeiro@valeverdepack-exemplo.com.br",
+    cnpj: "56.789.012/0001-33",
+    contratoStatus: "Em Homologação",
+    ndaStatus: "Assinado",
+    slaEntrega: "2 dias úteis",
+    contatoNome: "Seu Antônio Almeida",
+    contatoEmail: "boaesperanca@produtor-exemplo.com.br",
+    chavePix: "56.789.012/0001-33 (CNPJ)",
     contaBancaria:
-      "Banco do Brasil (001) • Ag. 1620-4 • C/C 34910-2 • Titular: Cartonagem Vale Verde ME (CNPJ 23.456.789/0001-12)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "R$ 1.200,00 / 500 un.",
-    tempoServico: "4 dias úteis (SLA de entrega)",
-    ndaStatus: "Pendente",
-    contratoStatus: "Pendente",
-    itensOfertados: [
+      "Sicoob (756) • Ag. 4012 • C/C 19844-0 • Titular: Associação Rural Boa Esperança ME",
+    itens: [
       {
-        nome: "Caixa Papelão Ondulado ON2 (60x40x40cm)",
-        tipo: "Produto",
-        valorOfertado: 6.15,
-        unidade: "por unidade",
-        prazoServico: "4 dias úteis",
-        pedidoMinimo: "500 unidades",
-        ncmOuCodigo: "NCM 4819.10.00",
-        icmsPadrao: 3.5,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 0,
-        issPadrao: 0,
-      },
-      {
-        nome: "Impressão Flexográfica 2 Cores",
-        tipo: "Serviço",
-        valorOfertado: 0.45,
-        unidade: "adicional por caixa",
-        prazoServico: "3 dias úteis",
-        pedidoMinimo: "500 unidades",
-        ncmOuCodigo: "LC 116 - Item 13.05",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 0,
-        issPadrao: 2,
+        id: "hf-1",
+        nome: "Caixa Hortifrúti Selecionado (20kg) — Entrega Direta",
+        ncm: "0709.99.90",
+        precoUnitario: 64.0,
+        unidade: "caixa",
+        pedidoMinimo: 40,
+        prazoEntrega: "2 dias úteis",
       },
     ],
   },
   {
-    id: "3",
-    nomeFantasia: "TransRápido Logística Refrigerada",
-    cnpj: "34.567.890/0001-34",
-    estado: "PR",
+    id: "sulquimica-rs",
+    sigla: "SQ",
+    corBadge: "bg-indigo-800",
+    nome: "SulQuímica Resinas & Polímeros",
+    razaoSocial: "SulQuímica Industrial Ltda",
+    uf: "RS",
+    cidade: "Caxias do Sul",
+    categoria: "Insumos Industriais",
+    porte: "Escala Industrial",
     regimeTributario: "Lucro Real",
-    categoria: "Logística & Transporte",
-    contatoComercial: "André Martins (Gerente Comercial)",
-    emailComercial: "andre.martins@transrapido-exemplo.com.br",
-    chavePix: "34.567.890/0001-34 (CNPJ)",
-    contaBancaria:
-      "Bradesco (237) • Ag. 2891 • C/C 99120-4 • Titular: TransRápido Logística S.A. (CNPJ 34.567.890/0001-34)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "1 rota ou 10 posições/mês",
-    tempoServico: "48h (Coleta e trânsito)",
-    ndaStatus: "Assinado",
+    cnpj: "67.890.123/0001-88",
     contratoStatus: "Vigente",
-    itensOfertados: [
-      {
-        nome: "Frete Fracionado Refrigerado (até 500 kg - SP/PR)",
-        tipo: "Serviço",
-        valorOfertado: 890.0,
-        unidade: "por rota/embarque",
-        prazoServico: "2 dias úteis",
-        pedidoMinimo: "1 embarque",
-        ncmOuCodigo: "CT-e Interestadual",
-        icmsPadrao: 12,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 0,
-      },
-      {
-        nome: "Armazenagem Climatizada (2°C a 8°C)",
-        tipo: "Serviço",
-        valorOfertado: 145.0,
-        unidade: "por posição/mês",
-        prazoServico: "Imediato",
-        pedidoMinimo: "10 posições",
-        ncmOuCodigo: "LC 116 - Item 11.04",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 5,
-      },
-    ],
-  },
-  {
-    id: "4",
-    nomeFantasia: "Usinagem Precisão Metal",
-    cnpj: "45.678.901/0001-56",
-    estado: "SC",
-    regimeTributario: "Lucro Presumido",
-    categoria: "Matéria-Prima & Usinagem",
-    contatoComercial: "Ricardo Weber (Diretor Técnico)",
-    emailComercial: "comercial@precisaometal-exemplo.com.br",
-    chavePix: "pix@precisaometal-exemplo.com.br",
-    contaBancaria:
-      "Santander (033) • Ag. 3104 • C/C 13004521-8 • Titular: Usinagem Precisão Metal Ltda (CNPJ 45.678.901/0001-56)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "R$ 800,00 por lote",
-    tempoServico: "6 dias úteis (Usinagem)",
     ndaStatus: "Assinado",
-    contratoStatus: "Pendente",
-    itensOfertados: [
-      {
-        nome: "Bucha / Eixo em Aço Inox 304 (Usinagem CNC)",
-        tipo: "Produto",
-        valorOfertado: 78.0,
-        unidade: "por peça",
-        prazoServico: "8 dias úteis",
-        pedidoMinimo: "15 peças",
-        ncmOuCodigo: "NCM 7307.29.00",
-        icmsPadrao: 12,
-        ipiPadrao: 6.5,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 0,
-      },
-      {
-        nome: "Hora Máquina Torno CNC / Centro de Usinagem",
-        tipo: "Serviço",
-        valorOfertado: 210.0,
-        unidade: "por hora técnica",
-        prazoServico: "5 dias úteis",
-        pedidoMinimo: "4 horas",
-        ncmOuCodigo: "LC 116 - Item 14.05",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 3,
-      },
-    ],
-  },
-  {
-    id: "5",
-    nomeFantasia: "EcoBox Embalagens Flexíveis",
-    cnpj: "56.789.012/0001-78",
-    estado: "SP",
-    regimeTributario: "Lucro Real",
-    categoria: "Embalagens",
-    contatoComercial: "Camila Rocha (Key Account)",
-    emailComercial: "camila.rocha@ecobox-exemplo.com.br",
-    chavePix: "56.789.012/0001-78 (CNPJ)",
+    slaEntrega: "6 dias úteis",
+    contatoNome: "Fernanda Silveira",
+    contatoEmail: "comercial@sulquimica-exemplo.com.br",
+    chavePix: "67.890.123/0001-88 (CNPJ)",
     contaBancaria:
-      "Banco Itaú (341) • Ag. 0892 • C/C 55219-0 • Titular: EcoBox Embalagens Flexíveis Ltda (CNPJ 56.789.012/0001-78)",
-    prazoPagamentoPadrao: "45 dias",
-    pedidoMinimoGeral: "R$ 1.500,00 / 25 bobinas",
-    tempoServico: "3 dias úteis (Pronta entrega)",
-    ndaStatus: "Assinado",
-    contratoStatus: "Vigente",
-    itensOfertados: [
+      "Banrisul (041) • Ag. 0180 • C/C 06.112890.0-5 • Titular: SulQuímica Industrial Ltda",
+    itens: [
       {
-        nome: "Caixa Papelão Ondulado ON2 (60x40x40cm)",
-        tipo: "Produto",
-        valorOfertado: 6.45,
-        unidade: "por unidade",
-        prazoServico: "3 dias úteis",
-        pedidoMinimo: "800 unidades",
-        ncmOuCodigo: "NCM 4819.10.00",
-        icmsPadrao: 18,
-        ipiPadrao: 5,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 0,
-      },
-      {
-        nome: "Bobina Filme Stretch 500mm x 25 micra",
-        tipo: "Produto",
-        valorOfertado: 64.9,
-        unidade: "por bobina",
-        prazoServico: "3 dias úteis",
-        pedidoMinimo: "25 bobinas",
-        ncmOuCodigo: "NCM 3920.10.99",
-        icmsPadrao: 18,
-        ipiPadrao: 9.75,
-        pisCofinsPadrao: 9.25,
-        issPadrao: 0,
-      },
-    ],
-  },
-  {
-    id: "6",
-    nomeFantasia: "NuvemSegura TI & Infraestrutura",
-    cnpj: "67.890.123/0001-91",
-    estado: "SP",
-    regimeTributario: "Lucro Presumido",
-    categoria: "TI & Cloud",
-    contatoComercial: "Felipe Andrade (Account Executive)",
-    emailComercial: "felipe.andrade@nuvemsegura-exemplo.com.br",
-    chavePix: "67.890.123/0001-91 (CNPJ)",
-    contaBancaria:
-      "BTG Pactual (208) • Ag. 0050 • C/C 0049182-1 • Titular: NuvemSegura TI Ltda (CNPJ 67.890.123/0001-91)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "Contrato mensal (1 mês)",
-    tempoServico: "Ativação em 48h (SLA 99,9%)",
-    ndaStatus: "Assinado",
-    contratoStatus: "Vigente",
-    itensOfertados: [
-      {
-        nome: "Monitoramento de Servidores & Cloud (Plano Essencial)",
-        tipo: "Serviço",
-        valorOfertado: 2890.0,
-        unidade: "por mês",
-        prazoServico: "Ativação em 48h",
-        pedidoMinimo: "1 mês",
-        ncmOuCodigo: "LC 116 - Item 01.07",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 2.9,
-      },
-      {
-        nome: "Auditoria de Segurança & Backup em Nuvem",
-        tipo: "Serviço",
-        valorOfertado: 4500.0,
-        unidade: "por pacote",
-        prazoServico: "10 dias úteis",
-        pedidoMinimo: "1 auditoria",
-        ncmOuCodigo: "LC 116 - Item 01.06",
-        icmsPadrao: 0,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 2.9,
-      },
-    ],
-  },
-  {
-    id: "7",
-    nomeFantasia: "ProGuard EPIs & Segurança",
-    cnpj: "78.901.234/0001-05",
-    estado: "MG",
-    regimeTributario: "Lucro Presumido",
-    categoria: "EPIs & Segurança do Trabalho",
-    contatoComercial: "Priscila Gomes (Vendas Corporativas)",
-    emailComercial: "priscila.gomes@proguardepi-exemplo.com.br",
-    chavePix: "pagamentos@proguardepi-exemplo.com.br",
-    contaBancaria:
-      "Caixa Econômica (104) • Ag. 0118 • C/C 0004821-7 • Titular: ProGuard EPIs Ltda (CNPJ 78.901.234/0001-05)",
-    prazoPagamentoPadrao: "30 dias",
-    pedidoMinimoGeral: "R$ 900,00 por pedido",
-    tempoServico: "2 dias úteis (Expedição)",
-    ndaStatus: "Pendente",
-    contratoStatus: "Pendente",
-    itensOfertados: [
-      {
-        nome: "Bota de Segurança Bico Composite CA Ativo",
-        tipo: "Produto",
-        valorOfertado: 89.9,
-        unidade: "por par",
-        prazoServico: "3 dias úteis",
-        pedidoMinimo: "10 pares",
-        ncmOuCodigo: "NCM 6403.40.00",
-        icmsPadrao: 12,
-        ipiPadrao: 0,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 0,
-      },
-      {
-        nome: "Luva Pigmentada / Nitrílica (Pacote 12 pares)",
-        tipo: "Produto",
-        valorOfertado: 54.0,
-        unidade: "por pacote",
-        prazoServico: "2 dias úteis",
-        pedidoMinimo: "15 pacotes",
-        ncmOuCodigo: "NCM 4015.19.00",
-        icmsPadrao: 12,
-        ipiPadrao: 3.25,
-        pisCofinsPadrao: 3.65,
-        issPadrao: 0,
+        id: "sq-1",
+        nome: "Resina Polietileno Alta Densidade (PEAD) — Bag 25kg",
+        ncm: "3901.20.29",
+        precoUnitario: 245.0,
+        unidade: "bag",
+        pedidoMinimo: 80,
+        prazoEntrega: "6 dias úteis",
       },
     ],
   },
 ];
 
-function extrairNumeroPedidoMinimo(texto: string): number | null {
-  const match = texto.replace(/\./g, "").match(/\d+/);
-  if (!match) return null;
-  const num = Number(match[0]);
-  return Number.isFinite(num) && num > 0 ? num : null;
+function formatarMoeda(valor: number): string {
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
-function obterIniciais(nome: string): string {
-  const partes = nome.trim().split(/\s+/);
-  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
-  return `${partes[0][0] || ""}${partes[1][0] || ""}`.toUpperCase();
-}
-
-function MiniaturaCategoriaSvg({ categoria }: { categoria: string }) {
-  if (categoria === "Embalagens") {
-    return (
-      <svg
-        viewBox="0 0 64 64"
-        className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 p-2 shrink-0"
-        aria-hidden="true"
-      >
-        <polygon points="32,8 54,19 32,30 10,19" fill="#F59E0B" />
-        <polygon points="10,19 32,30 32,54 10,43" fill="#D97706" />
-        <polygon points="54,19 32,30 32,54 54,43" fill="#B45309" />
-        <line
-          x1="21"
-          y1="13.5"
-          x2="43"
-          y2="24.5"
-          stroke="#FEF3C7"
-          strokeWidth="2.5"
-        />
-      </svg>
-    );
-  }
-
-  if (categoria === "Logística & Transporte") {
-    return (
-      <svg
-        viewBox="0 0 64 64"
-        className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-200 p-2 shrink-0"
-        aria-hidden="true"
-      >
-        <rect x="8" y="18" width="32" height="24" rx="4" fill="#0284C7" />
-        <path d="M40 24h10l6 8v10H40V24z" fill="#38BDF8" />
-        <circle cx="18" cy="45" r="5" fill="#0F172A" />
-        <circle cx="48" cy="45" r="5" fill="#0F172A" />
-      </svg>
-    );
-  }
-
-  if (categoria === "Matéria-Prima & Usinagem") {
-    return (
-      <svg
-        viewBox="0 0 64 64"
-        className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-300 p-2 shrink-0"
-        aria-hidden="true"
-      >
-        <circle
-          cx="32"
-          cy="32"
-          r="18"
-          fill="none"
-          stroke="#475569"
-          strokeWidth="6"
-          strokeDasharray="8 4"
-        />
-        <circle
-          cx="32"
-          cy="32"
-          r="8"
-          fill="#94A3B8"
-          stroke="#1E293B"
-          strokeWidth="2.5"
-        />
-      </svg>
-    );
-  }
-
-  if (categoria === "TI & Cloud") {
-    return (
-      <svg
-        viewBox="0 0 64 64"
-        className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-200 p-2 shrink-0"
-        aria-hidden="true"
-      >
-        <path
-          d="M20 44h26a10 10 0 0 0 1-19.9A14 14 0 0 0 20 28a9 9 0 0 0 0 16z"
-          fill="#4F46E5"
-        />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 p-2 shrink-0"
-      aria-hidden="true"
-    >
-      <path
-        d="M32 10L48 17v13c0 11-6.8 20.4-16 24-9.2-3.6-16-13-16-24V17l16-7z"
-        fill="#10B981"
-      />
-      <path
-        d="M25 32l5 5 9-10"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function EstadoVazioIlustracao({ mensagem }: { mensagem: string }) {
-  return (
-    <div className="py-8 px-4 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 space-y-2.5">
-      <svg
-        viewBox="0 0 80 80"
-        className="w-16 h-16 mx-auto"
-        aria-hidden="true"
-      >
-        <rect
-          x="18"
-          y="12"
-          width="44"
-          height="56"
-          rx="6"
-          fill="#F1F5F9"
-          stroke="#CBD5E1"
-          strokeWidth="2"
-        />
-        <line
-          x1="26"
-          y1="26"
-          x2="54"
-          y2="26"
-          stroke="#94A3B8"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <line
-          x1="26"
-          y1="36"
-          x2="48"
-          y2="36"
-          stroke="#CBD5E1"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <line
-          x1="26"
-          y1="46"
-          x2="42"
-          y2="46"
-          stroke="#CBD5E1"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <circle cx="54" cy="54" r="10" fill="#10B981" />
-        <path
-          d="M50 54h8M54 50v8"
-          stroke="#FFFFFF"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-      <p className="text-sm text-slate-500 max-w-md mx-auto">{mensagem}</p>
-    </div>
-  );
+function agoraFormatado(): string {
+  return new Date().toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function OperacoesConteudo() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const perfilParam = searchParams.get("perfil");
   const usuarioParam = searchParams.get("usuario");
-  const inicialId = searchParams.get("fornecedorId") || FORNECEDORES_OP[0].id;
-  const inicialAba =
-    searchParams.get("aba") === "contato" ? "contato" : "orcamento";
-  const itemInicial = Number(searchParams.get("itemIdx") || "0");
 
-  const comprovanteInputRef = useRef<HTMLInputElement | null>(null);
-  const evidenciaInputRef = useRef<HTMLInputElement | null>(null);
+  const perfil: PerfilOperacao =
+    perfilParam === "adm"
+      ? "adm"
+      : perfilParam === "fornecedor"
+      ? "fornecedor"
+      : "colaborador";
 
-  const [abaAtiva, setAbaAtiva] = useState<"orcamento" | "contato">(
-    inicialAba
+  const tema = TEMA_POR_PERFIL[perfil];
+  const temVisaoGlobal = perfil === "adm" || perfil === "colaborador";
+
+  const usuarioExibido =
+    usuarioParam ||
+    (perfil === "adm"
+      ? "fabio.lizardo@atlassupply-exemplo.com.br"
+      : perfil === "colaborador"
+      ? COLABORADOR_RESPONSAVEL.email
+      : "mariana.costa@packsul-exemplo.com.br");
+
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(
+    FORNECEDORES_INICIAIS
   );
-  const [fornecedorId, setFornecedorId] = useState<string>(inicialId);
-
-  const fornecedorAtual =
-    FORNECEDORES_OP.find((f) => f.id === fornecedorId) || FORNECEDORES_OP[0];
-
-  const [itemIndex, setItemIndex] = useState<number>(0);
-  const [quantidade, setQuantidade] = useState<number>(1000);
-  const [descontoPercentual, setDescontoPercentual] = useState<number>(0);
-  const [modalidadeCompra, setModalidadeCompra] = useState<
-    "Pedido Avulso" | "Contrato"
-  >(fornecedorAtual.contratoStatus === "Vigente" ? "Contrato" : "Pedido Avulso");
-  const [prazoPagamento, setPrazoPagamento] = useState<string>(
-    fornecedorAtual.prazoPagamentoPadrao
-  );
-  const [observacoesOrc, setObservacoesOrc] = useState<string>("");
-
-  const [evidenciaArquivo, setEvidenciaArquivo] = useState<File | null>(null);
-  const [evidenciaUrlPreview, setEvidenciaUrlPreview] = useState<string | null>(
-    null
+  const [fornecedorId, setFornecedorId] = useState<string>(
+    FORNECEDORES_INICIAIS[0].id
   );
 
-  const [comprovanteArquivo, setComprovanteArquivo] = useState<File | null>(
-    null
-  );
-  const [comprovanteUrlPreview, setComprovanteUrlPreview] = useState<
-    string | null
-  >(null);
-  const [envioAutomaticoComprovante, setEnvioAutomaticoComprovante] =
-    useState<boolean>(true);
-  const [avisoStatus, setAvisoStatus] = useState<{
-    tipo: "sucesso" | "alerta";
-    texto: string;
-  } | null>(null);
+  // Filtros da carteira de fornecedores (ADM & Colaborador)
+  const [buscaFornecedor, setBuscaFornecedor] = useState("");
+  const [filtroUf, setFiltroUf] = useState("TODOS");
+  const [filtroCategoria, setFiltroCategoria] = useState("TODAS");
 
-  const [modalidadeImposto, setModalidadeImposto] = useState<
-    "inclusos" | "por_fora"
-  >("por_fora");
-  const [aliquotaIcms, setAliquotaIcms] = useState<number>(
-    fornecedorAtual.itensOfertados[0].icmsPadrao
-  );
-  const [aliquotaIpi, setAliquotaIpi] = useState<number>(
-    fornecedorAtual.itensOfertados[0].ipiPadrao
-  );
-  const [aliquotaPisCofins, setAliquotaPisCofins] = useState<number>(
-    fornecedorAtual.itensOfertados[0].pisCofinsPadrao
-  );
-  const [aliquotaIss, setAliquotaIss] = useState<number>(
-    fornecedorAtual.itensOfertados[0].issPadrao
-  );
-  const [aliquotaDifalSt, setAliquotaDifalSt] = useState<number>(0);
-
-  const [orcamentos, setOrcamentos] = useState<OrcamentoCriado[]>([]);
-  const [escopoFornecedor, setEscopoFornecedor] = useState<
-    "selecionado" | "todos"
-  >("selecionado");
-  const [filtroPedidos, setFiltroPedidos] = useState<
-    "todos" | "ativos" | "cancelados"
-  >("todos");
-
-  const [modoContato, setModoContato] = useState<"Mensagem" | "Reunião">(
-    "Mensagem"
-  );
-  const [etapaProcesso, setEtapaProcesso] = useState<string>(
-    "Cotação de Preço (RFQ)"
-  );
-  const [emailDestinatario, setEmailDestinatario] = useState<string>(
-    fornecedorAtual.emailComercial
-  );
-  const [assunto, setAssunto] = useState<string>(
-    "Cotação de Preço (RFQ) — pedido mínimo, impostos e condições comerciais"
-  );
-  const [dataReuniao, setDataReuniao] = useState<string>("");
-  const [horaReuniao, setHoraReuniao] = useState<string>("10:00");
-  const [mensagemTexto, setMensagemTexto] = useState<string>("");
-  const [registrosContato, setRegistrosContato] = useState<RegistroContato[]>(
-    []
-  );
-
-  useEffect(() => {
-    try {
-      const salvoOrc = localStorage.getItem(STORAGE_KEY_ORCAMENTOS);
-      if (salvoOrc) {
-        const parsed: OrcamentoCriado[] = JSON.parse(salvoOrc);
-        if (Array.isArray(parsed)) {
-          setOrcamentos(
-            parsed.map((item) => ({
-              ...item,
-              statusPedido: item.statusPedido || "Ativo",
-              comprovanteUrl:
-                item.comprovanteUrl &&
-                (item.comprovanteUrl.startsWith("http://") ||
-                  item.comprovanteUrl.startsWith("https://"))
-                  ? item.comprovanteUrl
-                  : null,
-              evidenciaMinimoUrl:
-                item.evidenciaMinimoUrl &&
-                (item.evidenciaMinimoUrl.startsWith("http://") ||
-                  item.evidenciaMinimoUrl.startsWith("https://"))
-                  ? item.evidenciaMinimoUrl
-                  : null,
-            }))
-          );
-        }
-      }
-      const salvoCnt = localStorage.getItem(STORAGE_KEY_CONTATOS);
-      if (salvoCnt) {
-        const parsedCnt: RegistroContato[] = JSON.parse(salvoCnt);
-        if (Array.isArray(parsedCnt)) {
-          setRegistrosContato(parsedCnt);
-        }
-      }
-    } catch {
-      // ignora erro de storage
+  const fornecedorAtual = useMemo(() => {
+    if (perfil === "fornecedor") {
+      return fornecedores[0];
     }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_ORCAMENTOS, JSON.stringify(orcamentos));
-    } catch {
-      // ignora erro de quota
-    }
-  }, [orcamentos]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_CONTATOS,
-        JSON.stringify(registrosContato)
-      );
-    } catch {
-      // ignora erro de quota
-    }
-  }, [registrosContato]);
-
-  useEffect(() => {
-    const f =
-      FORNECEDORES_OP.find((item) => item.id === fornecedorId) ||
-      FORNECEDORES_OP[0];
-    const indiceValido =
-      itemInicial >= 0 && itemInicial < f.itensOfertados.length
-        ? itemInicial
-        : 0;
-    const it = f.itensOfertados[indiceValido];
-    setItemIndex(indiceValido);
-    setPrazoPagamento(f.prazoPagamentoPadrao);
-    setModalidadeCompra(
-      f.contratoStatus === "Vigente" ? "Contrato" : "Pedido Avulso"
+    return (
+      fornecedores.find((f) => f.id === fornecedorId) || fornecedores[0]
     );
-    setEmailDestinatario(f.emailComercial);
-    setDescontoPercentual(0);
-    setAliquotaIcms(it.icmsPadrao);
-    setAliquotaIpi(it.ipiPadrao);
-    setAliquotaPisCofins(it.pisCofinsPadrao);
-    setAliquotaIss(it.issPadrao);
-    setAliquotaDifalSt(f.estado !== "SP" ? 6 : 0);
+  }, [perfil, fornecedores, fornecedorId]);
 
-    setComprovanteArquivo(null);
-    setComprovanteUrlPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+  const ufsDisponiveis = useMemo(() => {
+    const unicos = Array.from(new Set(fornecedores.map((f) => f.uf)));
+    return ["TODOS", ...unicos];
+  }, [fornecedores]);
+
+  const categoriasDisponiveis = useMemo(() => {
+    const unicas = Array.from(new Set(fornecedores.map((f) => f.categoria)));
+    return ["TODAS", ...unicas];
+  }, [fornecedores]);
+
+  const fornecedoresFiltrados = useMemo(() => {
+    return fornecedores.filter((f) => {
+      const bateUf = filtroUf === "TODOS" || f.uf === filtroUf;
+      const bateCategoria =
+        filtroCategoria === "TODAS" || f.categoria === filtroCategoria;
+      const termo = buscaFornecedor.trim().toLowerCase();
+      const bateBusca =
+        !termo ||
+        f.nome.toLowerCase().includes(termo) ||
+        f.cidade.toLowerCase().includes(termo) ||
+        f.cnpj.toLowerCase().includes(termo) ||
+        f.categoria.toLowerCase().includes(termo) ||
+        f.itens.some((it) => it.nome.toLowerCase().includes(termo));
+      return bateUf && bateCategoria && bateBusca;
     });
-    if (comprovanteInputRef.current) comprovanteInputRef.current.value = "";
+  }, [fornecedores, buscaFornecedor, filtroUf, filtroCategoria]);
 
-    setEvidenciaArquivo(null);
-    setEvidenciaUrlPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    if (evidenciaInputRef.current) evidenciaInputRef.current.value = "";
+  const [itemId, setItemId] = useState<string>(fornecedorAtual.itens[0].id);
+  const itemSelecionado = useMemo(() => {
+    return (
+      fornecedorAtual.itens.find((i) => i.id === itemId) ||
+      fornecedorAtual.itens[0]
+    );
+  }, [fornecedorAtual, itemId]);
 
-    setAvisoStatus(null);
-  }, [fornecedorId, itemInicial]);
+  const [quantidade, setQuantidade] = useState<number>(
+    itemSelecionado.pedidoMinimo
+  );
+  const [desconto, setDesconto] = useState<number>(0);
+  const [modalidade, setModalidade] = useState<string>(
+    "Compra Spot / Lote Único"
+  );
+  const [prazoPagamento, setPrazoPagamento] = useState<string>("30 dias");
 
-  const handleSelecionarComprovante = (arquivo: File | null) => {
-    setComprovanteUrlPreview((urlAnterior) => {
-      if (urlAnterior) URL.revokeObjectURL(urlAnterior);
-      return arquivo ? URL.createObjectURL(arquivo) : null;
-    });
-    setComprovanteArquivo(arquivo);
-  };
+  const [comprovanteNome, setComprovanteNome] = useState<string | null>(null);
+  const [enviarEmailAuto, setEnviarEmailAuto] = useState<boolean>(true);
 
-  const handleRemoverComprovante = () => {
-    setComprovanteUrlPreview((urlAnterior) => {
-      if (urlAnterior) URL.revokeObjectURL(urlAnterior);
-      return null;
-    });
-    setComprovanteArquivo(null);
-    if (comprovanteInputRef.current) {
-      comprovanteInputRef.current.value = "";
-    }
-  };
+  const [modoImposto, setModoImposto] = useState<"por_fora" | "incluso">(
+    "por_fora"
+  );
+  const [icms, setIcms] = useState<number>(18);
+  const [ipi, setIpi] = useState<number>(5);
+  const [pisCofins, setPisCofins] = useState<number>(9.25);
+  const [iss, setIss] = useState<number>(0);
+  const [difalSt, setDifalSt] = useState<number>(0);
+  const [observacoes, setObservacoes] = useState<string>("");
 
-  const handleSelecionarEvidencia = (arquivo: File | null) => {
-    setEvidenciaUrlPreview((urlAnterior) => {
-      if (urlAnterior) URL.revokeObjectURL(urlAnterior);
-      return arquivo ? URL.createObjectURL(arquivo) : null;
-    });
-    setEvidenciaArquivo(arquivo);
-  };
+  // Sequenciadores de Requisição (REQ) e Purchase Order (PO)
+  const [seqRequisicao, setSeqRequisicao] = useState<number>(4810);
+  const [seqPO, setSeqPO] = useState<number>(9104);
 
-  const handleRemoverEvidencia = () => {
-    setEvidenciaUrlPreview((urlAnterior) => {
-      if (urlAnterior) URL.revokeObjectURL(urlAnterior);
-      return null;
-    });
-    setEvidenciaArquivo(null);
-    if (evidenciaInputRef.current) {
-      evidenciaInputRef.current.value = "";
-    }
-  };
-
-  const handleTrocarItem = (novoIdx: number) => {
-    setItemIndex(novoIdx);
-    const it = fornecedorAtual.itensOfertados[novoIdx];
-    if (it) {
-      setAliquotaIcms(it.icmsPadrao);
-      setAliquotaIpi(it.ipiPadrao);
-      setAliquotaPisCofins(it.pisCofinsPadrao);
-      setAliquotaIss(it.issPadrao);
-    }
-  };
-
-  const itemSelecionado =
-    fornecedorAtual.itensOfertados[itemIndex] ||
-    fornecedorAtual.itensOfertados[0];
-
-  const minimoNumerico = extrairNumeroPedidoMinimo(itemSelecionado.pedidoMinimo);
-  const abaixoDoMinimo =
-    minimoNumerico !== null && quantidade > 0 && quantidade < minimoNumerico;
+  const [orcamentos, setOrcamentos] = useState<OrcamentoRegistro[]>([]);
+  const [escopoLista, setEscopoLista] = useState<"este" | "todos">(
+    perfil === "adm" ? "todos" : "este"
+  );
+  const [filtroEtapa, setFiltroEtapa] = useState<
+    | "Todos"
+    | "Orcamento Criado"
+    | "Em Aprovacao (REQ)"
+    | "PO Emitida (Aprovado)"
+    | "Cancelado"
+  >("Todos");
 
   useEffect(() => {
-    if (!abaixoDoMinimo) {
-      handleRemoverEvidencia();
+    if (perfil === "adm") {
+      setEscopoLista("todos");
+    } else if (perfil === "colaborador") {
+      setEscopoLista("este");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abaixoDoMinimo]);
+  }, [perfil]);
 
-  const descontoLimpo = Math.min(Math.max(descontoPercentual, 0), 90);
-  const valorUnitarioFinal =
-    itemSelecionado.valorOfertado * (1 - descontoLimpo / 100);
-  const subtotalMercadoria = valorUnitarioFinal * quantidade;
+  const [avisoSistema, setAvisoSistema] = useState<string | null>(null);
 
-  const valorIcms = subtotalMercadoria * (aliquotaIcms / 100);
-  const valorIpi = subtotalMercadoria * (aliquotaIpi / 100);
-  const valorPisCofins = subtotalMercadoria * (aliquotaPisCofins / 100);
-  const valorIss = subtotalMercadoria * (aliquotaIss / 100);
-  const valorDifalSt = subtotalMercadoria * (aliquotaDifalSt / 100);
+  // Modal de Contato / Ajuda / Contestação
+  const [modalMensagemAberto, setModalMensagemAberto] =
+    useState<boolean>(false);
+  const [tipoContato, setTipoContato] = useState<
+    "Mensagem" | "Solicitação de Reunião" | "Contestação" | "Ajuda"
+  >("Mensagem");
+  const [orcamentoAlvoId, setOrcamentoAlvoId] = useState<string>("");
+  const [assuntoContato, setAssuntoContato] = useState<string>("");
+  const [dataReuniao, setDataReuniao] = useState<string>("");
+  const [textoContato, setTextoContato] = useState<string>("");
+  const [mensagens, setMensagens] = useState<MensagemRegistro[]>([]);
 
-  const totalImpostos =
-    valorIcms + valorIpi + valorPisCofins + valorIss + valorDifalSt;
+  function notificar(msg: string) {
+    setAvisoSistema(msg);
+    setTimeout(() => setAvisoSistema(null), 4200);
+  }
 
-  const valorTotalNota =
-    modalidadeImposto === "por_fora"
-      ? subtotalMercadoria + totalImpostos
-      : subtotalMercadoria + valorIpi + valorDifalSt;
+  function alternarPerfilSimulacao(novoPerfil: PerfilOperacao) {
+    const emailPorPerfil =
+      novoPerfil === "adm"
+        ? "fabio.lizardo@atlassupply-exemplo.com.br"
+        : novoPerfil === "colaborador"
+        ? COLABORADOR_RESPONSAVEL.email
+        : "mariana.costa@packsul-exemplo.com.br";
+    router.push(
+      `/operacoes?perfil=${novoPerfil}&usuario=${encodeURIComponent(
+        emailPorPerfil
+      )}`
+    );
+  }
 
-  const creditoTributarioEstimado =
-    fornecedorAtual.regimeTributario === "Simples Nacional"
-      ? 0
-      : valorIcms + valorPisCofins;
+  function selecionarFornecedor(novoFornecedor: Fornecedor) {
+    setFornecedorId(novoFornecedor.id);
+    const primeiroItem = novoFornecedor.itens[0];
+    setItemId(primeiroItem.id);
+    setQuantidade(primeiroItem.pedidoMinimo);
+    setDesconto(0);
+    setComprovanteNome(null);
+    setObservacoes("");
+  }
 
-  const custoLiquidoEfetivo = valorTotalNota - creditoTributarioEstimado;
+  function alterarStatusContratoAdm(novoStatus: string) {
+    setFornecedores((prev) =>
+      prev.map((f) =>
+        f.id === fornecedorAtual.id ? { ...f, contratoStatus: novoStatus } : f
+      )
+    );
+    notificar(
+      `Status contratual de ${fornecedorAtual.nome} atualizado para "${novoStatus}" pelo ADM & Owner.`
+    );
+  }
 
-  const handleCopiarTexto = async (texto: string, rotulo: string) => {
-    try {
-      await navigator.clipboard.writeText(texto);
-      setAvisoStatus({
-        tipo: "sucesso",
-        texto: `${rotulo} copiado para a área de transferência.`,
-      });
-    } catch {
-      setAvisoStatus({
-        tipo: "alerta",
-        texto: `Não foi possível copiar automaticamente. Dado: ${texto}`,
-      });
+  function handleTrocarItem(novoItemId: string) {
+    setItemId(novoItemId);
+    const encontrado = fornecedorAtual.itens.find((i) => i.id === novoItemId);
+    if (encontrado) {
+      setQuantidade(encontrado.pedidoMinimo);
     }
-  };
+  }
 
-  const montarLinkComprovanteEmail = (
-    orc: Pick<
-      OrcamentoCriado,
-      | "prazoPagamento"
-      | "fornecedorNome"
-      | "itemNome"
-      | "quantidade"
-      | "modalidadeCompra"
-      | "chavePix"
-      | "contaBancaria"
-      | "comprovanteNome"
-      | "emailDestino"
-    >,
-    totalFormatado: string
-  ) => {
-    const assuntoComprovante = `Comprovante de Pagamento (${orc.prazoPagamento}) — ${orc.fornecedorNome} — ${totalFormatado}`;
-    const corpoComprovante = [
-      `Olá ${fornecedorAtual.contatoComercial},`,
-      ``,
-      `Segue o registo do pagamento referente ao item: ${orc.itemNome} (Qtd: ${orc.quantidade}).`,
-      `Modalidade: ${orc.modalidadeCompra} • Pagamento/Prazo: ${orc.prazoPagamento}`,
-      `Chave PIX: ${orc.chavePix}`,
-      `Conta Bancária (CNPJ): ${orc.contaBancaria}`,
-      `Valor Total da NF: ${totalFormatado}`,
-      orc.comprovanteNome
-        ? `Ficheiro do comprovante selecionado: ${orc.comprovanteNome} (anexa o ficheiro no teu e-mail antes de enviar).`
-        : `Comprovante: será anexado em seguida.`,
-      ``,
-      `Com os melhores cumprimentos,`,
-    ].join("\n");
+  function copiarTexto(texto: string, label: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(texto).catch(() => {});
+    }
+    notificar(`${label} copiado para a área de transferência.`);
+  }
 
-    return `mailto:${encodeURIComponent(
-      orc.emailDestino
-    )}?subject=${encodeURIComponent(
-      assuntoComprovante
-    )}&body=${encodeURIComponent(corpoComprovante)}`;
-  };
+  function abrirModalFornecedor(
+    modo: "Contestação" | "Ajuda" | "Mensagem",
+    orc?: OrcamentoRegistro
+  ) {
+    setTipoContato(modo);
+    setOrcamentoAlvoId(orc ? orc.id : "");
+    if (modo === "Contestação" && orc) {
+      setAssuntoContato(
+        `Contestação — ${orc.id}${orc.numeroPO ? ` / ${orc.numeroPO}` : ""}`
+      );
+    } else if (modo === "Ajuda") {
+      setAssuntoContato("Ajuda sobre emissão de NF-e e vinculação da PO");
+    } else {
+      setAssuntoContato("");
+    }
+    setModalMensagemAberto(true);
+  }
 
-  const handleCriarOrcamento = (e: React.FormEvent) => {
+  const calculos = useMemo(() => {
+    const qtdValida = Math.max(0, Number(quantidade) || 0);
+    const descValido = Math.min(100, Math.max(0, Number(desconto) || 0));
+    const bruto = qtdValida * itemSelecionado.precoUnitario;
+    const subtotal = bruto * (1 - descValido / 100);
+
+    const aliqTotal =
+      (Number(icms) || 0) +
+      (Number(ipi) || 0) +
+      (Number(pisCofins) || 0) +
+      (Number(iss) || 0) +
+      (Number(difalSt) || 0);
+
+    const cargaTributaria = subtotal * (aliqTotal / 100);
+
+    const aliqCredito =
+      fornecedorAtual.regimeTributario === "Lucro Real"
+        ? (Number(icms) || 0) + (Number(pisCofins) || 0)
+        : 0;
+    const creditoEstimado = subtotal * (aliqCredito / 100);
+
+    const totalNf =
+      modoImposto === "por_fora" ? subtotal + cargaTributaria : subtotal;
+    const custoLiquido = Math.max(0, totalNf - creditoEstimado);
+
+    return {
+      subtotal,
+      cargaTributaria,
+      creditoEstimado,
+      totalNf,
+      custoLiquido,
+    };
+  }, [
+    quantidade,
+    desconto,
+    itemSelecionado,
+    icms,
+    ipi,
+    pisCofins,
+    iss,
+    difalSt,
+    modoImposto,
+    fornecedorAtual.regimeTributario,
+  ]);
+
+  // ETAPA 1 (Exclusiva de Colaborador & ADM): Criar Orçamento
+  function handleGuardarOrcamento(e: React.FormEvent) {
     e.preventDefault();
-    if (quantidade <= 0) return;
+    if (!temVisaoGlobal) return;
 
-    if (abaixoDoMinimo && !evidenciaArquivo) {
-      setAvisoStatus({
-        tipo: "alerta",
-        texto: `A quantidade (${quantidade}) está abaixo do pedido mínimo (${itemSelecionado.pedidoMinimo}). Anexa a evidência de exceção negociada para guardar o orçamento.`,
-      });
-      return;
-    }
-
-    const partesImpostos = [
-      aliquotaIcms > 0 ? `ICMS ${aliquotaIcms}%` : null,
-      aliquotaIpi > 0 ? `IPI ${aliquotaIpi}%` : null,
-      aliquotaPisCofins > 0 ? `PIS/COFINS ${aliquotaPisCofins}%` : null,
-      aliquotaIss > 0 ? `ISS ${aliquotaIss}%` : null,
-      aliquotaDifalSt > 0 ? `DIFAL/ST ${aliquotaDifalSt}%` : null,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
-    const temComprovante = Boolean(comprovanteArquivo);
-    const statusEnvio: OrcamentoCriado["statusEnvioComprovante"] = !temComprovante
-      ? "Sem comprovante anexado"
-      : envioAutomaticoComprovante
-        ? "Enviado automaticamente ao fornecedor"
-        : "Comprovante anexado (aguardando envio)";
-
-    const novoId = `ORC-${Date.now().toString().slice(-4)}`;
-    const totalFormatado = valorTotalNota.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-
-    const novo: OrcamentoCriado = {
+    const novoId = `ORC-${String(orcamentos.length + 101)}`;
+    const novo: OrcamentoRegistro = {
       id: novoId,
-      statusPedido: "Ativo",
       fornecedorId: fornecedorAtual.id,
-      fornecedorNome: fornecedorAtual.nomeFantasia,
-      categoriaFornecedor: fornecedorAtual.categoria,
-      cnpjFornecedor: fornecedorAtual.cnpj,
-      emailDestino: fornecedorAtual.emailComercial,
-      chavePix: fornecedorAtual.chavePix,
-      contaBancaria: fornecedorAtual.contaBancaria,
-      regimeTributario: fornecedorAtual.regimeTributario,
+      fornecedorNome: fornecedorAtual.nome,
       itemNome: itemSelecionado.nome,
-      ncmOuCodigo: itemSelecionado.ncmOuCodigo,
-      quantidade,
-      descontoPercentual: descontoLimpo,
-      pedidoMinimoTexto: itemSelecionado.pedidoMinimo,
-      abaixoDoMinimo,
-      evidenciaMinimoNome: evidenciaArquivo ? evidenciaArquivo.name : null,
-      evidenciaMinimoUrl: evidenciaUrlPreview,
-      subtotalMercadoria,
-      modalidadeImposto,
-      aliquotas: {
-        icms: aliquotaIcms,
-        ipi: aliquotaIpi,
-        pisCofins: aliquotaPisCofins,
-        iss: aliquotaIss,
-        difalSt: aliquotaDifalSt,
-      },
-      resumoImpostos: partesImpostos || "Isento / Sem alíquota informada",
-      totalImpostos,
-      creditoTributarioEstimado,
-      valorTotalNota,
-      custoLiquidoEfetivo,
-      modalidadeCompra,
+      ncm: itemSelecionado.ncm,
+      quantidade: Math.max(1, Number(quantidade) || 1),
+      descontoPercentual: Number(desconto) || 0,
+      modalidade,
       prazoPagamento,
-      comprovanteNome: comprovanteArquivo ? comprovanteArquivo.name : null,
-      comprovanteTamanhoKb: comprovanteArquivo
-        ? Math.max(1, Math.round(comprovanteArquivo.size / 1024))
-        : null,
-      comprovanteUrl: comprovanteUrlPreview,
-      envioAutomaticoAtivo: envioAutomaticoComprovante,
-      statusEnvioComprovante: statusEnvio,
-      observacoes: observacoesOrc,
-      criadoEm: new Date().toLocaleString("pt-BR"),
+      modoImposto,
+      icms: Number(icms) || 0,
+      ipi: Number(ipi) || 0,
+      pisCofins: Number(pisCofins) || 0,
+      iss: Number(iss) || 0,
+      difalSt: Number(difalSt) || 0,
+      subtotal: calculos.subtotal,
+      cargaTributaria: calculos.cargaTributaria,
+      creditoEstimado: calculos.creditoEstimado,
+      totalNf: calculos.totalNf,
+      custoLiquido: calculos.custoLiquido,
+      comprovanteNome,
+      enviadoEmail: enviarEmailAuto,
+      observacoes: observacoes.trim(),
+      etapaFluxo: "Orcamento Criado",
+      origem: perfil === "adm" ? "ADM & Owner" : "Mesa de Compras",
+      criadoEm: agoraFormatado(),
     };
 
     setOrcamentos((prev) => [novo, ...prev]);
+    setObservacoes("");
+    setComprovanteNome(null);
+    notificar(
+      `Orçamento ${novoId} criado para ${fornecedorAtual.nome}. Agora abra a Requisição (REQ) para aprovação.`
+    );
+  }
 
-    if (temComprovante && envioAutomaticoComprovante && comprovanteArquivo) {
-      const registroAuto: RegistroContato = {
-        id: `CNT-${Date.now().toString().slice(-4)}`,
-        tipo: "Mensagem",
-        etapaProcesso: "Comprovante de Pagamento (Automático)",
-        fornecedorNome: fornecedorAtual.nomeFantasia,
-        destinatario: fornecedorAtual.contatoComercial,
-        emailDestino: fornecedorAtual.emailComercial,
-        assuntoOuData: `Comprovante "${comprovanteArquivo.name}" — ${prazoPagamento} (${totalFormatado})`,
-        detalhes: `Envio automático disparado ao guardar o orçamento ${novoId} (${modalidadeCompra}). Pagamento via "${prazoPagamento}" (PIX: ${fornecedorAtual.chavePix}) com comprovante anexado (${comprovanteArquivo.name}).`,
-        criadoEm: new Date().toLocaleString("pt-BR"),
-      };
-      setRegistrosContato((prev) => [registroAuto, ...prev]);
-      setAvisoStatus({
-        tipo: "sucesso",
-        texto: `Orçamento ${novoId} guardado e envio automático registado para ${fornecedorAtual.emailComercial} com o comprovante "${comprovanteArquivo.name}".`,
-      });
-    } else if (temComprovante && comprovanteArquivo) {
-      setAvisoStatus({
-        tipo: "sucesso",
-        texto: `Orçamento ${novoId} guardado com o comprovante "${comprovanteArquivo.name}" anexado.`,
-      });
-    } else {
-      setAvisoStatus({
-        tipo: "sucesso",
-        texto: `Orçamento ${novoId} guardado com sucesso.`,
-      });
-    }
+  // ETAPA 2 (Exclusiva de Colaborador & ADM): Abrir Requisição de Compra (REQ)
+  function gerarRequisicao(orcamento: OrcamentoRegistro) {
+    if (!temVisaoGlobal) return;
+    const numReq = `REQ-2026-${seqRequisicao}`;
+    setSeqRequisicao((prev) => prev + 1);
 
-    setObservacoesOrc("");
-    setComprovanteArquivo(null);
-    setComprovanteUrlPreview(null);
-    if (comprovanteInputRef.current) comprovanteInputRef.current.value = "";
+    const alcada =
+      orcamento.totalNf > 15000
+        ? "Diretoria Executiva & Owner (Alçada Máxima)"
+        : orcamento.totalNf > 5000
+        ? "Gerência de Suprimentos & Controladoria"
+        : "Coordenação de Compras";
 
-    setEvidenciaArquivo(null);
-    setEvidenciaUrlPreview(null);
-    if (evidenciaInputRef.current) evidenciaInputRef.current.value = "";
-  };
-
-  const handleDuplicarOrcamento = (base: OrcamentoCriado) => {
-    const duplicado: OrcamentoCriado = {
-      ...base,
-      id: `ORC-${Date.now().toString().slice(-4)}`,
-      statusPedido: "Ativo",
-      canceladoEm: undefined,
-      criadoEm: new Date().toLocaleString("pt-BR"),
-    };
-    setOrcamentos((prev) => [duplicado, ...prev]);
-    setAvisoStatus({
-      tipo: "sucesso",
-      texto: `Orçamento ${base.id} duplicado como ${duplicado.id}.`,
-    });
-  };
-
-  const handleCancelarPedido = (id: string) => {
-    const agora = new Date().toLocaleString("pt-BR");
     setOrcamentos((prev) =>
       prev.map((o) =>
-        o.id === id
+        o.id === orcamento.id
           ? {
               ...o,
-              statusPedido: o.statusPedido === "Cancelado" ? "Ativo" : "Cancelado",
-              canceladoEm: o.statusPedido === "Cancelado" ? undefined : agora,
+              etapaFluxo: "Em Aprovacao (REQ)",
+              numeroRequisicao: numReq,
+              alcadaAprovacao: alcada,
+              requisicaoGeradaEm: agoraFormatado(),
+              motivoReprovacao: undefined,
             }
           : o
       )
     );
-    setAvisoStatus({
-      tipo: "alerta",
-      texto: `Pedido de compra ${id} atualizado no histórico.`,
-    });
-  };
 
-  const handleApagarCard = (id: string) => {
-    setOrcamentos((prev) => {
-      const alvo = prev.find((o) => o.id === id);
-      if (alvo?.comprovanteUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(alvo.comprovanteUrl);
-      }
-      if (alvo?.evidenciaMinimoUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(alvo.evidenciaMinimoUrl);
-      }
-      return prev.filter((o) => o.id !== id);
-    });
-    setAvisoStatus({
-      tipo: "sucesso",
-      texto: `Registo ${id} removido da lista.`,
-    });
-  };
-
-  const handleLimparCancelados = () => {
-    setOrcamentos((prev) =>
-      prev.filter((o) => {
-        if (
-          escopoFornecedor === "selecionado" &&
-          o.fornecedorId !== fornecedorAtual.id
-        ) {
-          return true;
-        }
-        return o.statusPedido !== "Cancelado";
-      })
+    notificar(
+      `Requisição ${numReq} aberta! Aprovação em andamento com ${alcada}.`
     );
-    setAvisoStatus({
-      tipo: "sucesso",
-      texto: "Pedidos cancelados removidos para manter o histórico clean.",
-    });
-  };
+  }
 
-  const orcamentosDoEscopo = orcamentos.filter((o) =>
-    escopoFornecedor === "selecionado"
-      ? o.fornecedorId === fornecedorAtual.id
-      : true
-  );
+  // ETAPA 3 (Exclusiva de Colaborador & ADM): Aprovar e Gerar PO para o Fornecedor
+  function aprovarEEmitirPO(orcamento: OrcamentoRegistro) {
+    if (!temVisaoGlobal) return;
+    const numPO = `PO-2026-${seqPO}`;
+    setSeqPO((prev) => prev + 1);
 
-  const orcamentosFiltrados = orcamentosDoEscopo.filter((o) => {
-    if (filtroPedidos === "ativos") return o.statusPedido !== "Cancelado";
-    if (filtroPedidos === "cancelados") return o.statusPedido === "Cancelado";
-    return true;
-  });
+    const aprovadorAssinatura =
+      perfil === "adm"
+        ? `Fabio Lizardo — ADM & Owner (${usuarioExibido})`
+        : `Mesa de Compras (${usuarioExibido})`;
 
-  const totalCancelados = orcamentosDoEscopo.filter(
-    (o) => o.statusPedido === "Cancelado"
-  ).length;
+    setOrcamentos((prev) =>
+      prev.map((o) =>
+        o.id === orcamento.id
+          ? {
+              ...o,
+              etapaFluxo: "PO Emitida (Aprovado)",
+              numeroPO: numPO,
+              aprovadoPor: aprovadorAssinatura,
+              poEmitidaEm: agoraFormatado(),
+            }
+          : o
+      )
+    );
 
-  const montarMailtoHref = () => {
-    const assuntoCompleto =
-      modoContato === "Reunião"
-        ? `[${etapaProcesso}] Convite de Reunião (${dataReuniao || "A combinar"} às ${horaReuniao}) — ${assunto}`
-        : `[${etapaProcesso}] ${assunto}`;
+    notificar(
+      `Requisição ${orcamento.numeroRequisicao} aprovada! PO ${numPO} emitida para o fornecedor inserir na NF-e.`
+    );
+  }
 
-    const corpoBase =
-      modoContato === "Reunião"
-        ? `Olá ${fornecedorAtual.contatoComercial},\n\nEtapa: ${etapaProcesso}\nGostaria de agendar uma reunião no dia ${dataReuniao || "[definir data]"} às ${horaReuniao}.\n\nPauta: ${mensagemTexto || assunto}\n\nCom os melhores cumprimentos,`
-        : `Olá ${fornecedorAtual.contatoComercial},\n\nEtapa: ${etapaProcesso}\n${mensagemTexto || "Gostaria de alinhar pedido mínimo, alíquotas fiscais (ICMS/IPI/ISS), prazos de pagamento e valores."}\n\nCom os melhores cumprimentos,`;
+  function reprovarRequisicao(orcamento: OrcamentoRegistro) {
+    if (!temVisaoGlobal) return;
+    setOrcamentos((prev) =>
+      prev.map((o) =>
+        o.id === orcamento.id
+          ? {
+              ...o,
+              etapaFluxo: "Reprovado",
+              motivoReprovacao:
+                "Devolvido pelos responsáveis de aprovação para revisão.",
+            }
+          : o
+      )
+    );
+    notificar(
+      `Requisição ${orcamento.numeroRequisicao} devolvida na etapa de aprovação.`
+    );
+  }
 
-    return `mailto:${encodeURIComponent(emailDestinatario)}?subject=${encodeURIComponent(
-      assuntoCompleto
-    )}&body=${encodeURIComponent(corpoBase)}`;
-  };
+  function cancelarOuReabrir(orcamento: OrcamentoRegistro) {
+    if (!temVisaoGlobal) return;
+    setOrcamentos((prev) =>
+      prev.map((o) =>
+        o.id === orcamento.id
+          ? {
+              ...o,
+              etapaFluxo:
+                o.etapaFluxo === "Cancelado" ? "Orcamento Criado" : "Cancelado",
+            }
+          : o
+      )
+    );
+  }
 
-  const handleEnviarContato = (e: React.FormEvent) => {
+  function handleEnviarMensagem(e: React.FormEvent) {
     e.preventDefault();
-    if (!mensagemTexto.trim()) return;
+    if (!assuntoContato.trim() || !textoContato.trim()) return;
 
-    const resumoDataHora =
-      modoContato === "Reunião"
-        ? `Reunião em ${dataReuniao || "a definir"} às ${horaReuniao} — ${assunto}`
-        : assunto;
+    const hora = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-    const novo: RegistroContato = {
-      id: `CNT-${Date.now().toString().slice(-4)}`,
-      tipo: modoContato,
-      etapaProcesso,
-      fornecedorNome: fornecedorAtual.nomeFantasia,
-      destinatario: fornecedorAtual.contatoComercial,
-      emailDestino: emailDestinatario,
-      assuntoOuData: resumoDataHora,
-      detalhes: mensagemTexto.trim(),
-      criadoEm: new Date().toLocaleString("pt-BR"),
+    const novaMsg: MensagemRegistro = {
+      id: `MSG-${Date.now()}`,
+      fornecedorId: fornecedorAtual.id,
+      fornecedorNome: fornecedorAtual.nome,
+      remetente:
+        perfil === "adm"
+          ? `Fabio Lizardo — ADM & Owner (${usuarioExibido})`
+          : perfil === "colaborador"
+          ? `Mesa de Compras (${usuarioExibido})`
+          : `${fornecedorAtual.contatoNome} — ${fornecedorAtual.nome}`,
+      tipo: tipoContato,
+      assunto: assuntoContato.trim(),
+      dataReuniao:
+        tipoContato === "Solicitação de Reunião" ? dataReuniao : undefined,
+      conteudo: textoContato.trim(),
+      criadoEm: hora,
     };
 
-    setRegistrosContato((prev) => [novo, ...prev]);
-    setMensagemTexto("");
-  };
+    if (perfil === "fornecedor" && tipoContato === "Contestação" && orcamentoAlvoId) {
+      setOrcamentos((prev) =>
+        prev.map((o) =>
+          o.id === orcamentoAlvoId
+            ? {
+                ...o,
+                contestacaoFornecedor: {
+                  motivo: assuntoContato.trim(),
+                  detalhes: textoContato.trim(),
+                  registradoEm: `${agoraFormatado()} (${hora})`,
+                },
+              }
+            : o
+        )
+      );
+      notificar(
+        `Contestação registrada no orçamento ${orcamentoAlvoId} e enviada para o colaborador responsável.`
+      );
+    } else {
+      notificar(
+        `${tipoContato} registrada e enviada para ${
+          perfil === "fornecedor"
+            ? COLABORADOR_RESPONSAVEL.email
+            : fornecedorAtual.contatoEmail
+        }.`
+      );
+    }
+
+    setMensagens((prev) => [novaMsg, ...prev]);
+    setAssuntoContato("");
+    setDataReuniao("");
+    setTextoContato("");
+    setOrcamentoAlvoId("");
+  }
+
+  const orcamentosVisiveis = useMemo(() => {
+    const base =
+      perfil === "fornecedor" || escopoLista === "este"
+        ? orcamentos.filter((o) => o.fornecedorId === fornecedorAtual.id)
+        : orcamentos;
+
+    if (filtroEtapa === "Todos") return base;
+    return base.filter((o) => o.etapaFluxo === filtroEtapa);
+  }, [orcamentos, perfil, escopoLista, fornecedorAtual.id, filtroEtapa]);
+
+  const mensagensDoFornecedor = useMemo(() => {
+    return mensagens.filter((m) => m.fornecedorId === fornecedorAtual.id);
+  }, [mensagens, fornecedorAtual.id]);
+
+  const resumoFluxo = useMemo(() => {
+    const lista =
+      perfil === "fornecedor"
+        ? orcamentos.filter((o) => o.fornecedorId === fornecedorAtual.id)
+        : orcamentos;
+    const valorTotalPOs = lista
+      .filter((o) => o.etapaFluxo === "PO Emitida (Aprovado)")
+      .reduce((acc, item) => acc + item.totalNf, 0);
+
+    return {
+      total: lista.length,
+      aguardandoReq: lista.filter((o) => o.etapaFluxo === "Orcamento Criado")
+        .length,
+      emAprovacao: lista.filter((o) => o.etapaFluxo === "Em Aprovacao (REQ)")
+        .length,
+      poEmitida: lista.filter((o) => o.etapaFluxo === "PO Emitida (Aprovado)")
+        .length,
+      valorTotalPOs,
+    };
+  }, [orcamentos, perfil, fornecedorAtual.id]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Faixa de integração com a página inicial da Atlas Supply & Comércio */}
-      <div className="bg-stone-950 text-stone-200 border-b border-stone-800 px-6 py-2.5 text-xs">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="relative min-h-screen text-slate-900 flex flex-col">
+      {/* Imagem de fundo fixa exclusiva por perfil */}
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <img
+          src={tema.imagemFundo}
+          alt={tema.altFundo}
+          className="w-full h-full object-cover object-center"
+        />
+        <div
+          className={`absolute inset-0 ${tema.overlayPagina} backdrop-blur-[2px]`}
+        />
+      </div>
+
+      {/* Barra superior institucional */}
+      <div className="bg-stone-950 text-stone-200 text-xs py-2.5 px-4 border-b border-stone-800">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="font-bold text-amber-400">
               Atlas Supply &amp; Comércio
             </span>
             <span className="text-stone-600">•</span>
-            <span className="px-2 py-0.5 rounded bg-stone-800 text-amber-200 font-medium">
-              {perfilParam === "colaborador"
+            <span
+              className={`px-2.5 py-0.5 rounded-full font-semibold ${
+                perfil === "adm"
+                  ? "bg-amber-500 text-stone-950"
+                  : perfil === "colaborador"
+                  ? "bg-blue-600 text-white"
+                  : "bg-emerald-500 text-slate-950"
+              }`}
+            >
+              {perfil === "adm"
+                ? "Perfil: ADM & Owner • Governança Total"
+                : perfil === "colaborador"
                 ? "Perfil: Colaborador (Mesa de Compras)"
-                : perfilParam === "fornecedor"
-                  ? "Perfil: Fornecedor Parceiro"
-                  : "Acesso direto à Operação"}
+                : "Perfil: Fornecedor Parceiro"}
             </span>
-            {usuarioParam && (
-              <span className="text-stone-300 hidden sm:inline">
-                ({usuarioParam})
-              </span>
-            )}
+            <span className="text-stone-400">({usuarioExibido})</span>
           </div>
 
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-medium underline underline-offset-4"
+            className="text-amber-300 hover:text-amber-200 font-medium transition-colors"
           >
             ← Voltar para a página inicial
           </Link>
         </div>
       </div>
 
-      <header className="bg-slate-900 text-white border-b border-slate-800 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Cabeçalho principal com imagem temática de cada página */}
+      <header className="relative overflow-hidden text-white py-6 px-4 sm:px-6 border-b border-white/15">
+        <img
+          src={tema.imagemFundo}
+          alt={tema.altFundo}
+          className="absolute inset-0 w-full h-full object-cover object-center opacity-55"
+        />
+        <div className={`absolute inset-0 ${tema.overlayHeader}`} />
+
+        <div className="relative max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-              Operações de Compras &amp; Fiscal
-            </span>
-            <h1 className="text-xl font-bold">
-              Orçamentos com Impostos, Comprovante e Reuniões
+            <p
+              className={`text-[11px] font-semibold uppercase tracking-widest ${
+                perfil === "adm"
+                  ? "text-amber-300"
+                  : perfil === "colaborador"
+                  ? "text-sky-300"
+                  : "text-emerald-300"
+              }`}
+            >
+              {perfil === "adm"
+                ? "GOVERNANÇA EXECUTIVA & OWNER • VISIBILIDADE IRRESTRITA DE TODA A REDE"
+                : perfil === "colaborador"
+                ? "MESA DE COMPRAS • 1. ABRE REQ → 2. APROVAÇÃO → 3. PO PARA NF-E"
+                : "PORTAL DO FORNECEDOR • ORÇAMENTO, PO PARA NF-E, DOCUMENTOS & CONTESTAÇÃO"}
+            </p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5">
+              {perfil === "adm"
+                ? "Painel ADM & Owner — Carteira Global, Requisições (REQ) e POs"
+                : perfil === "colaborador"
+                ? "Operações de Compras — Requisição (REQ), Aprovação e Emissão de PO"
+                : "Portal do Fornecedor — Orçamentos, PO para NF-e e Contestação"}
             </h1>
           </div>
-          <Link
-            href="/"
-            className="bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-lg border border-slate-700 transition-colors"
-          >
-            ← Voltar ao Portal de Busca
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center bg-black/50 backdrop-blur-xs border border-white/20 rounded-lg p-1 text-[11px]">
+              <button
+                type="button"
+                onClick={() => alternarPerfilSimulacao("adm")}
+                className={`px-2.5 py-1 rounded font-semibold transition-colors cursor-pointer ${
+                  perfil === "adm"
+                    ? "bg-amber-500 text-slate-950"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                ADM / Owner
+              </button>
+              <button
+                type="button"
+                onClick={() => alternarPerfilSimulacao("colaborador")}
+                className={`px-2.5 py-1 rounded font-semibold transition-colors cursor-pointer ${
+                  perfil === "colaborador"
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                Colaborador
+              </button>
+              <button
+                type="button"
+                onClick={() => alternarPerfilSimulacao("fornecedor")}
+                className={`px-2.5 py-1 rounded font-semibold transition-colors cursor-pointer ${
+                  perfil === "fornecedor"
+                    ? "bg-emerald-500 text-slate-950"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                Fornecedor
+              </button>
+            </div>
+
+            <Link
+              href="/"
+              className="px-3.5 py-2 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-semibold text-white transition-colors"
+            >
+              ← Início
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Fornecedor + Avatar SVG + Dados Bancários & PIX */}
-        <section className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-            <div className="flex items-start gap-3.5 flex-1">
-              <div
-                className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0 mt-5"
-                title={fornecedorAtual.nomeFantasia}
+      {/* Conteúdo Operacional */}
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 flex-1">
+        {/* Faixa Exclusiva do ADM & Owner */}
+        {perfil === "adm" && (
+          <section className="bg-stone-900/95 text-white rounded-2xl border border-amber-500/40 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-amber-500 text-stone-950">
+                  Modo ADM &amp; Project Owner
+                </span>
+                <span className="text-xs text-stone-300">
+                  Fabio Lizardo • Visibilidade total sobre{" "}
+                  <strong>{fornecedores.length} fornecedores</strong> e aprovações
+                </span>
+              </div>
+              <p className="text-xs text-stone-300">
+                Selecione qualquer fornecedor para auditar cotações, abrir REQ,
+                aprovar POs e acompanhar contestações enviadas por fornecedores.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-stone-400">
+                Status do contrato atual:
+              </span>
+              {(["Vigente", "Em Homologação", "Em Revisão"] as const).map(
+                (st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => alterarStatusContratoAdm(st)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      fornecedorAtual.contratoStatus === st
+                        ? "bg-amber-500 text-stone-950"
+                        : "bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700"
+                    }`}
+                  >
+                    {st}
+                  </button>
+                )
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Faixa de Contato com Colaborador Responsável e Botão de Ajuda para o Fornecedor */}
+        {perfil === "fornecedor" && (
+          <section className="bg-white/95 backdrop-blur-xs rounded-2xl border border-emerald-300 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                Colaborador Responsável &amp; Suporte ao Fornecedor
+              </span>
+              <p className="text-sm font-bold text-slate-900">
+                {COLABORADOR_RESPONSAVEL.nome}
+              </p>
+              <p className="text-xs text-slate-600">
+                E-mail: <strong>{COLABORADOR_RESPONSAVEL.email}</strong> •
+                Atendimento: <strong>{COLABORADOR_RESPONSAVEL.ramal}</strong>
+              </p>
+              <p className="text-[11px] text-slate-500">
+                As cotações e REQs são abertas pela equipe da Atlas Supply.
+                Aqui você acompanha orçamentos, POs aprovadas para emitir sua NF-e,
+                documentos e pode contestar qualquer condição.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => abrirModalFornecedor("Ajuda")}
+                className="px-3.5 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold cursor-pointer"
               >
-                {obterIniciais(fornecedorAtual.nomeFantasia)}
+                ? Ajuda / Dúvidas NF-e
+              </button>
+              <button
+                type="button"
+                onClick={() => abrirModalFornecedor("Contestação")}
+                className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold cursor-pointer"
+              >
+                Contestar condição
+              </button>
+            </div>
+          </section>
+        )}
+
+        {avisoSistema && (
+          <div className="bg-emerald-900 text-white text-xs font-medium px-4 py-3 rounded-xl shadow-sm flex items-center justify-between gap-2">
+            <span>{avisoSistema}</span>
+            <button
+              type="button"
+              onClick={() => setAvisoSistema(null)}
+              className="text-emerald-200 hover:text-white underline text-[11px] cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
+        {/* Faixa de Esteira Procure-to-Pay */}
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white/95 backdrop-blur-xs rounded-xl border border-slate-200/90 p-3.5 shadow-xs">
+            <p className="text-[11px] font-semibold uppercase text-slate-400">
+              1. Orçamentos / RFQ
+            </p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">
+              {resumoFluxo.total}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {resumoFluxo.aguardandoReq} aguardando REQ
+            </p>
+          </div>
+
+          <div className="bg-white/95 backdrop-blur-xs rounded-xl border border-amber-200 p-3.5 shadow-xs">
+            <p className="text-[11px] font-semibold uppercase text-amber-700">
+              2. Aprovação em Andamento
+            </p>
+            <p className="text-xl font-bold text-amber-900 mt-0.5">
+              {resumoFluxo.emAprovacao}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              REQ passando por responsáveis
+            </p>
+          </div>
+
+          <div className="bg-white/95 backdrop-blur-xs rounded-xl border border-emerald-200 p-3.5 shadow-xs">
+            <p className="text-[11px] font-semibold uppercase text-emerald-700">
+              3. POs Geradas p/ NF-e
+            </p>
+            <p className="text-xl font-bold text-emerald-800 mt-0.5">
+              {resumoFluxo.poEmitida}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Total aprovado: {formatarMoeda(resumoFluxo.valorTotalPOs)}
+            </p>
+          </div>
+
+          <div className="bg-slate-900/95 text-white rounded-xl p-3.5 shadow-xs">
+            <p className="text-[11px] font-semibold uppercase text-amber-300">
+              Próxima Numeração
+            </p>
+            <p className="text-xs font-semibold mt-1">
+              REQ: <span className="text-white">REQ-2026-{seqRequisicao}</span>
+            </p>
+            <p className="text-xs font-semibold mt-0.5">
+              PO: <span className="text-emerald-400">PO-2026-{seqPO}</span>
+            </p>
+          </div>
+        </section>
+
+        {/* Cartão Superior: Dados Fiscais, Contrato e Dados Bancários */}
+        <section
+          className={`bg-white/95 backdrop-blur-xs rounded-2xl border ${tema.bordaDestaque} p-5 shadow-sm space-y-4`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 flex-1 min-w-[260px]">
+              <div
+                className={`w-12 h-12 rounded-xl ${fornecedorAtual.corBadge} text-white font-bold flex items-center justify-center text-base shrink-0`}
+              >
+                {fornecedorAtual.sigla}
               </div>
 
-              <div className="flex-1 space-y-2">
-                <label className="block text-xs font-semibold text-slate-500 uppercase">
-                  Fornecedor Selecionado
-                </label>
-                <select
-                  value={fornecedorId}
-                  onChange={(e) => setFornecedorId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium"
-                >
-                  {FORNECEDORES_OP.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nomeFantasia} ({f.estado} • {f.regimeTributario})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-1">
+              <div className="flex-1 space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {perfil === "adm"
+                    ? "FORNECEDOR INSPECIONADO PELO ADM & OWNER"
+                    : perfil === "colaborador"
+                    ? "FORNECEDOR SELECIONADO NA MESA DE COMPRAS"
+                    : "EMPRESA PARCEIRA LOGADA"}
+                </p>
+
+                {temVisaoGlobal ? (
+                  <select
+                    value={fornecedorAtual.id}
+                    onChange={(e) => {
+                      const achado = fornecedores.find(
+                        (f) => f.id === e.target.value
+                      );
+                      if (achado) selecionarFornecedor(achado);
+                    }}
+                    className="w-full max-w-xl rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    {fornecedores.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.nome} ({f.uf} • {f.regimeTributario})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-base sm:text-lg font-bold text-slate-900">
+                    {fornecedorAtual.nome}{" "}
+                    <span className="text-xs font-medium text-slate-500">
+                      ({fornecedorAtual.cidade}/{fornecedorAtual.uf} •{" "}
+                      {fornecedorAtual.regimeTributario})
+                    </span>
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 pt-0.5">
                   <span>
                     CNPJ: <strong>{fornecedorAtual.cnpj}</strong>
                   </span>
@@ -1284,77 +1222,79 @@ function OperacoesConteudo() {
                     NDA: <strong>{fornecedorAtual.ndaStatus}</strong>
                   </span>
                   <span>
-                    Tempo de Serviço:{" "}
-                    <strong>{fornecedorAtual.tempoServico}</strong>
+                    SLA de entrega:{" "}
+                    <strong>{fornecedorAtual.slaEntrega}</strong>
+                  </span>
+                  <span>
+                    Contato: <strong>{fornecedorAtual.contatoNome}</strong> (
+                    {fornecedorAtual.contatoEmail})
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {temVisaoGlobal ? (
+                <a
+                  href="#formulario-orcamento"
+                  className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                >
+                  Criar Orçamento / REQ
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => abrirModalFornecedor("Contestação")}
+                  className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Contestar Orçamento / PO
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => setAbaAtiva("orcamento")}
-                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                  abaAtiva === "orcamento"
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
+                onClick={() => abrirModalFornecedor("Mensagem")}
+                className="px-4 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
               >
-                Criar Orçamento
-              </button>
-              <button
-                type="button"
-                onClick={() => setAbaAtiva("contato")}
-                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                  abaAtiva === "contato"
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                Mensagem / Reunião
+                {perfil === "fornecedor"
+                  ? "Falar com Colaborador"
+                  : "Mensagem / Reunião"}{" "}
+                {mensagensDoFornecedor.length > 0 &&
+                  `(${mensagensDoFornecedor.length})`}
               </button>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs bg-slate-50 p-3 rounded-lg">
-            <div className="space-y-1">
-              <div>
-                <span className="text-slate-500 font-semibold uppercase mr-1.5">
-                  Chave PIX:
-                </span>
-                <strong className="text-slate-900">
-                  {fornecedorAtual.chavePix}
-                </strong>
-              </div>
-              <div>
-                <span className="text-slate-500 font-semibold uppercase mr-1.5">
-                  Conta Bancária (CNPJ):
-                </span>
-                <strong className="text-slate-900">
-                  {fornecedorAtual.contaBancaria}
-                </strong>
-              </div>
+          <div className="bg-slate-50/90 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-0.5 text-xs text-slate-700">
+              <p>
+                <span className="font-semibold text-slate-500">CHAVE PIX:</span>{" "}
+                <strong>{fornecedorAtual.chavePix}</strong>
+              </p>
+              <p>
+                <span className="font-semibold text-slate-500">
+                  CONTA BANCÁRIA (CNPJ):
+                </span>{" "}
+                {fornecedorAtual.contaBancaria}
+              </p>
             </div>
-            <div className="flex gap-2 shrink-0">
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() =>
-                  handleCopiarTexto(fornecedorAtual.chavePix, "Chave PIX")
+                  copiarTexto(fornecedorAtual.chavePix, "Chave PIX")
                 }
-                className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-300 font-semibold text-slate-800 transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
               >
                 Copiar PIX
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  handleCopiarTexto(
-                    fornecedorAtual.contaBancaria,
-                    "Conta Bancária"
-                  )
+                  copiarTexto(fornecedorAtual.contaBancaria, "Conta bancária")
                 }
-                className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-300 font-semibold text-slate-800 transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
               >
                 Copiar Conta
               </button>
@@ -1362,461 +1302,592 @@ function OperacoesConteudo() {
           </div>
         </section>
 
-        {avisoStatus && (
-          <div
-            className={`p-3.5 rounded-xl border text-xs font-semibold ${
-              avisoStatus.tipo === "alerta"
-                ? "bg-amber-50 border-amber-300 text-amber-900"
-                : "bg-emerald-50 border-emerald-200 text-emerald-900"
-            }`}
-          >
-            {avisoStatus.tipo === "alerta" ? "⚠ " : "✓ "}
-            {avisoStatus.texto}
-          </div>
-        )}
-
-        {abaAtiva === "orcamento" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <form
-              onSubmit={handleCriarOrcamento}
-              className="lg:col-span-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
+        {/* Grid Principal */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* COLUNA ESQUERDA */}
+          {temVisaoGlobal ? (
+            <section
+              id="formulario-orcamento"
+              className="lg:col-span-6 bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-5"
             >
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-base font-bold text-slate-900">
-                  Novo Orçamento (Cotação de Preço — RFQ)
-                </h2>
-                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                  {itemSelecionado.ncmOuCodigo}
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Novo Orçamento (Cotação de Preço — RFQ)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    1. Guarde o orçamento → 2. Abra a REQ para aprovação → 3.
+                    Emita a PO para a NF-e.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
+                  NCM {itemSelecionado.ncm}
                 </span>
               </div>
 
-              <div className="flex items-start gap-3">
-                <MiniaturaCategoriaSvg categoria={fornecedorAtual.categoria} />
-
-                <div className="flex-1 min-w-0">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Item Ofertado para a Empresa
+              <form onSubmit={handleGuardarOrcamento} className="space-y-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    ITEM OFERTADO PARA A EMPRESA
                   </label>
                   <select
-                    value={itemIndex}
-                    onChange={(e) => handleTrocarItem(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                    value={itemSelecionado.id}
+                    onChange={(e) => handleTrocarItem(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    {fornecedorAtual.itensOfertados.map((it, idx) => (
-                      <option key={it.nome} value={idx}>
-                        {it.nome} — Ofertado:{" "}
-                        {it.valorOfertado.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}{" "}
-                        ({it.unidade})
+                    {fornecedorAtual.itens.map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.nome} — Ofertado: {formatarMoeda(it.precoUnitario)}{" "}
+                        (por {it.unidade})
                       </option>
                     ))}
                   </select>
-                  <div className="flex flex-wrap gap-3 text-xs text-slate-500 mt-1.5">
-                    <span>
-                      Pedido mínimo:{" "}
-                      <strong className="text-slate-800">
-                        {itemSelecionado.pedidoMinimo}
-                      </strong>
-                    </span>
-                    <span>
-                      Prazo:{" "}
-                      <strong className="text-slate-800">
-                        {itemSelecionado.prazoServico}
-                      </strong>
-                    </span>
+                  <p className="text-xs text-slate-600">
+                    Pedido mínimo:{" "}
+                    <strong>
+                      {itemSelecionado.pedidoMinimo.toLocaleString("pt-BR")}{" "}
+                      {itemSelecionado.unidade}
+                    </strong>{" "}
+                    • Prazo: <strong>{itemSelecionado.prazoEntrega}</strong>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                      QUANTIDADE
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={quantidade}
+                      onChange={(e) => setQuantidade(Number(e.target.value))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                      DESCONTO (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      value={desconto}
+                      onChange={(e) => setDesconto(Number(e.target.value))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                      MODALIDADE
+                    </label>
+                    <select
+                      value={modalidade}
+                      onChange={(e) => setModalidade(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      <option>Compra Spot / Lote Único</option>
+                      <option>Contrato</option>
+                      <option>Programação Mensal</option>
+                      <option>Operação Comex (FOB / CIF)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                      PRAZO / FORMA PAGAMENTO
+                    </label>
+                    <select
+                      value={prazoPagamento}
+                      onChange={(e) => setPrazoPagamento(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    >
+                      <option>À vista (PIX / TED)</option>
+                      <option>15 dias</option>
+                      <option>30 dias</option>
+                      <option>30 / 60 dias</option>
+                      <option>Carta de Crédito (Comex)</option>
+                    </select>
                   </div>
                 </div>
+
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-blue-900">
+                      COMPROVANTE / DOCUMENTO DO ORÇAMENTO (PDF / IMAGEM)
+                    </span>
+                    <span className="text-[11px] text-slate-600">
+                      PIX: {fornecedorAtual.chavePix}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold cursor-pointer transition-colors">
+                      Escolher arquivo
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          setComprovanteNome(file ? file.name : null);
+                        }}
+                      />
+                    </label>
+                    <span className="text-xs text-slate-600">
+                      {comprovanteNome || "Nenhum arquivo escolhido"}
+                    </span>
+                  </div>
+
+                  <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={enviarEmailAuto}
+                      onChange={(e) => setEnviarEmailAuto(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300"
+                    />
+                    <span>
+                      Compartilhar documento automaticamente com o fornecedor (
+                      <strong>{fornecedorAtual.contatoEmail}</strong>)
+                    </span>
+                  </label>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl p-3.5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      COMPOSIÇÃO TRIBUTÁRIA (BRASIL)
+                    </span>
+                    <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setModoImposto("por_fora")}
+                        className={`px-2.5 py-1 font-semibold cursor-pointer ${
+                          modoImposto === "por_fora"
+                            ? "bg-slate-900 text-white"
+                            : "bg-white text-slate-700"
+                        }`}
+                      >
+                        + Impostos por fora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModoImposto("incluso")}
+                        className={`px-2.5 py-1 font-semibold cursor-pointer ${
+                          modoImposto === "incluso"
+                            ? "bg-slate-900 text-white"
+                            : "bg-white text-slate-700"
+                        }`}
+                      >
+                        Impostos inclusos
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        ICMS (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={icms}
+                        onChange={(e) => setIcms(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        IPI (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={ipi}
+                        onChange={(e) => setIpi(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        PIS/COFINS (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={pisCofins}
+                        onChange={(e) => setPisCofins(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        ISS (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={iss}
+                        onChange={(e) => setIss(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        DIFAL / ST (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={difalSt}
+                        onChange={(e) => setDifalSt(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                    OBSERVAÇÕES FISCAIS / ENTREGA
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    placeholder="Ex.: Vincular ao contrato vigente, destacar ICMS/IPI na NF-e e confirmar janela de descarga..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="bg-slate-950 text-white rounded-xl p-4 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-300">
+                    <span>
+                      Subtotal dos itens ({quantidade} {itemSelecionado.unidade}):
+                    </span>
+                    <span className="font-semibold text-white">
+                      {formatarMoeda(calculos.subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Carga tributária calculada:</span>
+                    <span>{formatarMoeda(calculos.cargaTributaria)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-400">
+                    <span>
+                      Crédito tributário estimado (
+                      {fornecedorAtual.regimeTributario}):
+                    </span>
+                    <span>- {formatarMoeda(calculos.creditoEstimado)}</span>
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-slate-800 flex items-baseline justify-between">
+                    <span className="text-sm font-bold">
+                      Total da Nota Fiscal (NF):
+                    </span>
+                    <span className="text-xl font-bold text-emerald-400">
+                      {formatarMoeda(calculos.totalNf)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-400">
+                    <span>Custo líquido efetivo (descontando créditos):</span>
+                    <span>{formatarMoeda(calculos.custoLiquido)}</span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors cursor-pointer"
+                >
+                  Guardar Orçamento com Impostos
+                </button>
+              </form>
+            </section>
+          ) : (
+            /* COLUNA ESQUERDA DO FORNECEDOR: Documentos, Contato do Colaborador, Ajuda e Contestação */
+            <section className="lg:col-span-5 bg-white/95 backdrop-blur-xs rounded-2xl border border-emerald-200 p-5 sm:p-6 shadow-sm space-y-4">
+              <div>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                  Visão Restrita do Fornecedor
+                </span>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Documentos, Contato e Contestação
+                </h2>
+                <p className="text-xs text-slate-500">
+                  A abertura de REQ e aprovação de PO são feitas pela equipe da
+                  Atlas Supply. Aqui você consulta documentos, fala com o
+                  colaborador ou contesta condições.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Quantidade
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={quantidade}
-                    onChange={(e) => setQuantidade(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Desconto (%)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={90}
-                    step={0.5}
-                    value={descontoPercentual}
-                    onChange={(e) =>
-                      setDescontoPercentual(Number(e.target.value))
-                    }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Modalidade
-                  </label>
-                  <select
-                    value={modalidadeCompra}
-                    onChange={(e) =>
-                      setModalidadeCompra(
-                        e.target.value as "Pedido Avulso" | "Contrato"
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
+                <p className="font-bold text-slate-900 uppercase text-[11px] tracking-wider text-slate-500">
+                  Contato do Colaborador Responsável
+                </p>
+                <p className="text-sm font-bold text-slate-900">
+                  {COLABORADOR_RESPONSAVEL.nome}
+                </p>
+                <p className="text-slate-600">
+                  E-mail: <strong>{COLABORADOR_RESPONSAVEL.email}</strong>
+                </p>
+                <p className="text-slate-600">
+                  Telefone: <strong>{COLABORADOR_RESPONSAVEL.ramal}</strong>
+                </p>
+                <div className="pt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copiarTexto(
+                        COLABORADOR_RESPONSAVEL.email,
+                        "E-mail do colaborador"
                       )
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                    className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-800 cursor-pointer"
                   >
-                    <option value="Pedido Avulso">Pedido Avulso</option>
-                    <option value="Contrato">Contrato</option>
-                  </select>
+                    Copiar e-mail
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => abrirModalFornecedor("Mensagem")}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+                  >
+                    Enviar mensagem
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-2 text-xs">
+                <p className="font-bold text-emerald-950">
+                  Como inserir a PO na Nota Fiscal (NF-e)?
+                </p>
+                <p className="text-emerald-900 leading-relaxed">
+                  Quando um orçamento for aprovado, o número{" "}
+                  <strong>PO-2026-XXXX</strong> aparecerá ao lado no card do
+                  pedido. Informe esse número no campo de pedido/observações da
+                  sua NF-e antes do faturamento.
+                </p>
+                <div className="pt-1 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => abrirModalFornecedor("Ajuda")}
+                    className="px-3 py-1.5 rounded-lg bg-white border border-emerald-300 hover:bg-emerald-100/60 text-emerald-950 font-semibold cursor-pointer"
+                  >
+                    Central de Ajuda
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => abrirModalFornecedor("Contestação")}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold cursor-pointer"
+                  >
+                    Contestar divergência
+                  </button>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-bold text-slate-800">
+                  Documentos &amp; Comprovantes Vinculados
+                </p>
+                {orcamentosVisiveis.filter((o) => o.comprovanteNome).length ===
+                0 ? (
+                  <p className="text-xs text-slate-500">
+                    Nenhum documento/comprovante anexado nos registros atuais.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5 text-xs">
+                    {orcamentosVisiveis
+                      .filter((o) => o.comprovanteNome)
+                      .map((o) => (
+                        <li
+                          key={o.id}
+                          className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                        >
+                          <span className="font-semibold text-slate-800">
+                            {o.comprovanteNome}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            Ref.: {o.id}
+                            {o.numeroPO ? ` • ${o.numeroPO}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* COLUNA DIREITA */}
+          <div
+            className={`${
+              temVisaoGlobal ? "lg:col-span-6" : "lg:col-span-7"
+            } space-y-6`}
+          >
+            {temVisaoGlobal && (
+              <section className="bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+                      {perfil === "adm"
+                        ? "Carteira Completa • Governança ADM & Owner"
+                        : "Visibilidade Completa • Mesa de Compras"}
+                    </span>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      Base de Fornecedores por Região e Segmento
+                    </h2>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                    {fornecedoresFiltrados.length} de {fornecedores.length}{" "}
+                    exibidos
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Prazo / Forma Pagamento
-                  </label>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <input
+                    type="text"
+                    value={buscaFornecedor}
+                    onChange={(e) => setBuscaFornecedor(e.target.value)}
+                    placeholder="Buscar fornecedor, cidade, CNPJ ou item..."
+                    className="sm:col-span-7 rounded-lg border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
                   <select
-                    value={prazoPagamento}
-                    onChange={(e) => setPrazoPagamento(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                    value={filtroCategoria}
+                    onChange={(e) => setFiltroCategoria(e.target.value)}
+                    className="sm:col-span-5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    {PRAZOS_PAGAMENTO_OPCOES.map((prazo) => (
-                      <option key={prazo} value={prazo}>
-                        {prazo}
+                    {categoriasDisponiveis.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat === "TODAS" ? "Todos os segmentos" : cat}
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {abaixoDoMinimo && (
-                <div className="p-4 rounded-lg border border-amber-300 bg-amber-50/70 space-y-2.5">
-                  <div className="text-xs font-bold text-amber-950">
-                    ⚠ Quantidade abaixo do pedido mínimo (
-                    {itemSelecionado.pedidoMinimo})
-                  </div>
-                  <p className="text-xs text-amber-900">
-                    Para seguir com quantidade inferior ao mínimo sugerido pelo
-                    fornecedor, anexa uma evidência de aprovação/exceção (ex.:
-                    e-mail, captura de ecrã ou PDF do fornecedor).
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      ref={evidenciaInputRef}
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg"
-                      onChange={(e) =>
-                        handleSelecionarEvidencia(e.target.files?.[0] || null)
-                      }
-                      className="block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-700 file:text-white hover:file:bg-amber-800 cursor-pointer"
-                    />
-                  </div>
-                  {evidenciaArquivo && (
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-800 pt-1">
-                      <div className="flex items-center gap-1.5">
-                        <span>Evidência anexada:</span>
-                        {evidenciaUrlPreview ? (
-                          <a
-                            href={evidenciaUrlPreview}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-blue-700 underline hover:text-blue-900"
-                          >
-                            {evidenciaArquivo.name}
-                          </a>
-                        ) : (
-                          <strong>{evidenciaArquivo.name}</strong>
-                        )}
-                      </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500 mr-1">
+                    Região (UF):
+                  </span>
+                  {ufsDisponiveis.map((uf) => (
+                    <button
+                      key={uf}
+                      type="button"
+                      onClick={() => setFiltroUf(uf)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                        filtroUf === uf
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {uf === "TODOS" ? "Todos os estados" : uf}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                  {fornecedoresFiltrados.length === 0 ? (
+                    <div className="border border-dashed border-slate-300 rounded-xl p-6 text-center text-xs text-slate-500">
+                      Nenhum fornecedor encontrado para esse filtro.{" "}
                       <button
                         type="button"
-                        onClick={handleRemoverEvidencia}
-                        className="px-2.5 py-1 rounded bg-white hover:bg-red-50 text-red-700 border border-red-200 font-semibold text-[11px]"
+                        onClick={() => {
+                          setBuscaFornecedor("");
+                          setFiltroUf("TODOS");
+                          setFiltroCategoria("TODAS");
+                        }}
+                        className="text-blue-600 font-semibold underline cursor-pointer"
                       >
-                        Remover
+                        Limpar filtros
                       </button>
                     </div>
+                  ) : (
+                    fornecedoresFiltrados.map((f) => {
+                      const selecionado = f.id === fornecedorAtual.id;
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => selecionarFornecedor(f)}
+                          className={`rounded-xl border p-3.5 transition-all cursor-pointer ${
+                            selecionado
+                              ? "border-blue-600 bg-blue-50/70 shadow-sm"
+                              : "border-slate-200 hover:border-slate-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`w-10 h-10 rounded-lg ${f.corBadge} text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5`}
+                              >
+                                {f.sigla}
+                              </div>
+                              <div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <h3 className="text-sm font-bold text-slate-900">
+                                    {f.nome}
+                                  </h3>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 text-white">
+                                    {f.uf}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {f.cidade}/{f.uf} • {f.categoria} •{" "}
+                                  {f.regimeTributario}
+                                </p>
+                                <p className="text-[11px] text-slate-600 mt-1">
+                                  Principal item:{" "}
+                                  <strong>{f.itens[0].nome}</strong> (
+                                  {formatarMoeda(f.itens[0].precoUnitario)})
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 space-y-1">
+                              <span
+                                className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                  f.contratoStatus === "Vigente"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-amber-100 text-amber-800"
+                                }`}
+                              >
+                                {f.contratoStatus}
+                              </span>
+                              <p className="text-[11px] font-semibold text-blue-700">
+                                {selecionado
+                                  ? "● Selecionado"
+                                  : "Selecionar →"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
-              )}
+              </section>
+            )}
 
-              <div className="p-4 rounded-lg border border-blue-200 bg-blue-50/40 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase text-blue-900">
-                    Comprovante de Pagamento (PIX / TED / Boleto)
-                  </span>
-                  <span className="text-[11px] text-slate-600">
-                    PIX: <strong>{fornecedorAtual.chavePix}</strong>
-                  </span>
-                </div>
-
+            {/* ESTEIRA DE ORÇAMENTO -> REQUISIÇÃO (REQ) -> APROVAÇÃO -> PO */}
+            <section className="bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <input
-                    ref={comprovanteInputRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp"
-                    onChange={(e) =>
-                      handleSelecionarComprovante(e.target.files?.[0] || null)
-                    }
-                    className="block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
-                  />
-                  {comprovanteArquivo && (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-700 bg-white/80 px-3 py-2 rounded-md border border-blue-100">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span>Ficheiro anexado:</span>
-                        {comprovanteUrlPreview ? (
-                          <a
-                            href={comprovanteUrlPreview}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-blue-700 underline hover:text-blue-900"
-                          >
-                            {comprovanteArquivo.name}
-                          </a>
-                        ) : (
-                          <strong>{comprovanteArquivo.name}</strong>
-                        )}
-                        <span>
-                          (
-                          {Math.max(
-                            1,
-                            Math.round(comprovanteArquivo.size / 1024)
-                          )}{" "}
-                          KB)
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleRemoverComprovante}
-                        className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-semibold text-[11px] transition-colors"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <label className="flex items-center gap-2 text-xs text-slate-800 font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={envioAutomaticoComprovante}
-                    onChange={(e) =>
-                      setEnvioAutomaticoComprovante(e.target.checked)
-                    }
-                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>
-                    Enviar comprovante automaticamente para o fornecedor (
-                    <strong>{fornecedorAtual.emailComercial}</strong>) ao guardar
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">
+                    {temVisaoGlobal
+                      ? "Esteira de Aprovação & Pedidos"
+                      : "Meus Orçamentos, Requisições e POs para NF-e"}
                   </span>
-                </label>
-              </div>
-
-              <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/70 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase text-slate-700">
-                    Composição Tributária (Brasil)
-                  </span>
-                  <div className="flex rounded-md bg-slate-200 p-0.5 text-[11px] font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setModalidadeImposto("por_fora")}
-                      className={`px-2.5 py-1 rounded ${
-                        modalidadeImposto === "por_fora"
-                          ? "bg-white text-slate-900 shadow-xs"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      + Impostos por fora
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalidadeImposto("inclusos")}
-                      className={`px-2.5 py-1 rounded ${
-                        modalidadeImposto === "inclusos"
-                          ? "bg-white text-slate-900 shadow-xs"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      Impostos inclusos
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">
-                      ICMS (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={40}
-                      step={0.1}
-                      value={aliquotaIcms}
-                      onChange={(e) => setAliquotaIcms(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">
-                      IPI (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={50}
-                      step={0.1}
-                      value={aliquotaIpi}
-                      onChange={(e) => setAliquotaIpi(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">
-                      PIS/COFINS (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      step={0.05}
-                      value={aliquotaPisCofins}
-                      onChange={(e) =>
-                        setAliquotaPisCofins(Number(e.target.value))
-                      }
-                      className="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">
-                      ISS (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.1}
-                      value={aliquotaIss}
-                      onChange={(e) => setAliquotaIss(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">
-                      DIFAL / ST (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={40}
-                      step={0.1}
-                      value={aliquotaDifalSt}
-                      onChange={(e) =>
-                        setAliquotaDifalSt(Number(e.target.value))
-                      }
-                      className="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Observações Fiscais / Entrega
-                </label>
-                <textarea
-                  rows={2}
-                  value={observacoesOrc}
-                  onChange={(e) => setObservacoesOrc(e.target.value)}
-                  placeholder="Ex: Vincular ao contrato vigente, destacar ICMS/IPI na NF-e..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                />
-              </div>
-
-              <div className="bg-slate-900 text-white p-4 rounded-lg space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-300">
-                  <span>Subtotal dos itens ({quantidade} un.):</span>
-                  <span>
-                    {subtotalMercadoria.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Carga tributária calculada:</span>
-                  <span>
-                    {totalImpostos.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between text-emerald-300">
-                  <span>
-                    Crédito tributário estimado ({fornecedorAtual.regimeTributario}):
-                  </span>
-                  <span>
-                    -{" "}
-                    {creditoTributarioEstimado.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-slate-700 text-sm">
-                  <span className="font-semibold">Total da Nota Fiscal (NF):</span>
-                  <strong className="text-lg font-bold text-emerald-400">
-                    {valorTotalNota.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </strong>
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>Custo líquido efetivo (descontando créditos):</span>
-                  <span>
-                    {custoLiquidoEfetivo.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    })}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
-              >
-                {comprovanteArquivo && envioAutomaticoComprovante
-                  ? "Guardar Orçamento e Enviar Comprovante"
-                  : "Guardar Orçamento com Impostos"}
-              </button>
-            </form>
-
-            {/* Coluna Direita: Orçamentos Gerados */}
-            <div className="lg:col-span-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-bold text-slate-900">
-                    Orçamentos Gerados ({orcamentosFiltrados.length})
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {temVisaoGlobal
+                      ? `Orçamentos, Requisições (REQ) e POs (${orcamentosVisiveis.length})`
+                      : `Orçamentos e POs Emitidas (${orcamentosVisiveis.length})`}
                   </h2>
+                </div>
 
-                  <div className="flex rounded-md bg-slate-100 p-0.5 text-[11px] font-semibold">
+                {temVisaoGlobal && (
+                  <div className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs bg-slate-50">
                     <button
                       type="button"
-                      onClick={() => setEscopoFornecedor("selecionado")}
-                      className={`px-2.5 py-1 rounded ${
-                        escopoFornecedor === "selecionado"
+                      onClick={() => setEscopoLista("este")}
+                      className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                        escopoLista === "este"
                           ? "bg-white text-slate-900 shadow-xs"
                           : "text-slate-600"
                       }`}
@@ -1825,9 +1896,9 @@ function OperacoesConteudo() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEscopoFornecedor("todos")}
-                      className={`px-2.5 py-1 rounded ${
-                        escopoFornecedor === "todos"
+                      onClick={() => setEscopoLista("todos")}
+                      className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                        escopoLista === "todos"
                           ? "bg-white text-slate-900 shadow-xs"
                           : "text-slate-600"
                       }`}
@@ -1835,456 +1906,478 @@ function OperacoesConteudo() {
                       Todos ({orcamentos.length})
                     </button>
                   </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  {(
-                    [
-                      {
-                        key: "todos",
-                        label: `Todos (${orcamentosDoEscopo.length})`,
-                      },
-                      {
-                        key: "ativos",
-                        label: `Ativos (${
-                          orcamentosDoEscopo.filter(
-                            (o) => o.statusPedido !== "Cancelado"
-                          ).length
-                        })`,
-                      },
-                      {
-                        key: "cancelados",
-                        label: `Cancelados (${totalCancelados})`,
-                      },
-                    ] as const
-                  ).map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setFiltroPedidos(item.key)}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                        filtroPedidos === item.key
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-
-                  {totalCancelados > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleLimparCancelados}
-                      className="px-2.5 py-1 rounded-md bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-semibold transition-colors"
-                    >
-                      Limpar cancelados
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
 
-              {orcamentosFiltrados.length === 0 ? (
-                <EstadoVazioIlustracao
-                  mensagem={
-                    escopoFornecedor === "selecionado"
-                      ? `Nenhum orçamento registado para ${fornecedorAtual.nomeFantasia} ainda. Preenche o formulário ao lado para criar o primeiro.`
-                      : "Nenhum orçamento registado neste filtro no momento."
-                  }
-                />
-              ) : (
-                <div className="space-y-3">
-                  {orcamentosFiltrados.map((orc) => {
-                    const isCancelado = orc.statusPedido === "Cancelado";
-                    const totalFmt = orc.valorTotalNota.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    });
-                    const liquidoFmt = orc.custoLiquidoEfetivo.toLocaleString(
-                      "pt-BR",
-                      {
-                        style: "currency",
-                        currency: "BRL",
-                      }
-                    );
-                    const categoriaCard =
-                      orc.categoriaFornecedor ||
-                      FORNECEDORES_OP.find((f) => f.id === orc.fornecedorId)
-                        ?.categoria ||
-                      "Embalagens";
-
-                    return (
-                      <div
-                        key={orc.id}
-                        className={`p-4 rounded-lg border space-y-2.5 transition-colors ${
-                          isCancelado
-                            ? "border-red-200 bg-red-50/40 opacity-80"
-                            : "border-slate-200 bg-slate-50/60"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold text-blue-700">
-                              {orc.id} • {orc.fornecedorNome} (
-                              {orc.modalidadeCompra})
-                            </span>
-                            {isCancelado && (
-                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">
-                                Pedido Cancelado
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[11px] text-slate-500 hidden sm:inline">
-                              {orc.criadoEm}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicarOrcamento(orc)}
-                              className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-semibold text-slate-700"
-                            >
-                              Duplicar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleApagarCard(orc.id)}
-                              title="Fechar / apagar orçamento da lista"
-                              aria-label={`Fechar orçamento ${orc.id}`}
-                              className="w-6 h-6 flex items-center justify-center rounded bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 text-xs font-bold text-slate-700 hover:text-red-700 transition-colors"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <MiniaturaCategoriaSvg categoria={categoriaCard} />
-                          <div className="min-w-0">
-                            <p
-                              className={`text-sm font-semibold ${
-                                isCancelado
-                                  ? "line-through text-slate-500"
-                                  : "text-slate-900"
-                              }`}
-                            >
-                              {orc.itemNome} ({orc.ncmOuCodigo}) — Qtd:{" "}
-                              {orc.quantidade}
-                            </p>
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              Tributos:{" "}
-                              <strong>{orc.resumoImpostos}</strong> • Pagto/Prazo:{" "}
-                              <strong>{orc.prazoPagamento}</strong>
-                              {isCancelado && orc.canceladoEm
-                                ? ` • Cancelado em ${orc.canceladoEm}`
-                                : ""}
-                            </p>
-                          </div>
-                        </div>
-
-                        {orc.abaixoDoMinimo && (
-                          <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded flex flex-wrap items-center gap-1.5">
-                            <span>
-                              Abaixo do mínimo ({orc.pedidoMinimoTexto}) •
-                              Evidência:
-                            </span>
-                            {orc.evidenciaMinimoUrl ? (
-                              <a
-                                href={orc.evidenciaMinimoUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-semibold text-blue-700 underline"
-                              >
-                                {orc.evidenciaMinimoNome}
-                              </a>
-                            ) : (
-                              <strong>{orc.evidenciaMinimoNome}</strong>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 text-xs pt-1">
-                          <span>
-                            Mercadoria:{" "}
-                            <strong>
-                              {orc.subtotalMercadoria.toLocaleString("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              })}
-                            </strong>
-                          </span>
-                          <span>
-                            Impostos:{" "}
-                            <strong>
-                              {orc.totalImpostos.toLocaleString("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              })}
-                            </strong>
-                          </span>
-                          <span className="text-emerald-700 font-bold">
-                            Total NF: {totalFmt}
-                          </span>
-                          <span className="text-slate-900 font-bold">
-                            Custo líquido efetivo: {liquidoFmt}
-                          </span>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                          <div className="space-y-0.5">
-                            <span className="font-semibold text-slate-800 block">
-                              {orc.statusEnvioComprovante}
-                            </span>
-                            <span className="block text-[11px] text-slate-600">
-                              PIX: <strong>{orc.chavePix}</strong> • Conta CNPJ:{" "}
-                              <strong>{orc.cnpjFornecedor}</strong>
-                            </span>
-                            {orc.comprovanteNome && (
-                              <span className="block text-[11px] text-slate-600">
-                                Anexo:{" "}
-                                {orc.comprovanteUrl ? (
-                                  <a
-                                    href={orc.comprovanteUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="font-semibold text-blue-700 underline hover:text-blue-900"
-                                  >
-                                    {orc.comprovanteNome}
-                                  </a>
-                                ) : (
-                                  orc.comprovanteNome
-                                )}{" "}
-                                ({orc.comprovanteTamanhoKb} KB) →{" "}
-                                {orc.emailDestino}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleCancelarPedido(orc.id)}
-                              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
-                                isCancelado
-                                  ? "bg-white hover:bg-slate-100 text-slate-700 border-slate-300"
-                                  : "bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
-                              }`}
-                            >
-                              {isCancelado
-                                ? "Reativar pedido"
-                                : "Cancelar pedido de compra"}
-                            </button>
-
-                            {orc.comprovanteNome && !isCancelado && (
-                              <a
-                                href={montarLinkComprovanteEmail(orc, totalFmt)}
-                                className="inline-block bg-slate-900 hover:bg-slate-800 text-white font-semibold px-3 py-1.5 rounded-lg text-[11px] text-center"
-                              >
-                                ✉️ Disparar E-mail do Comprovante
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
-                        {orc.observacoes && (
-                          <p className="text-xs text-slate-500 italic">
-                            Obs: {orc.observacoes}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <form
-              onSubmit={handleEnviarContato}
-              className="lg:col-span-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-base font-bold text-slate-900">
-                  Falar com {fornecedorAtual.nomeFantasia}
-                </h2>
-                <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    { id: "Todos", label: "Todos" },
+                    { id: "Orcamento Criado", label: "1. Orçamento" },
+                    { id: "Em Aprovacao (REQ)", label: "2. Em Aprovação (REQ)" },
+                    { id: "PO Emitida (Aprovado)", label: "3. PO Emitida" },
+                    { id: "Cancelado", label: "Cancelados" },
+                  ] as const
+                ).map((tab) => (
                   <button
+                    key={tab.id}
                     type="button"
-                    onClick={() => setModoContato("Mensagem")}
-                    className={`px-3 py-1 rounded-md ${
-                      modoContato === "Mensagem"
-                        ? "bg-white text-slate-900 shadow-xs"
-                        : "text-slate-600"
+                    onClick={() => setFiltroEtapa(tab.id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer ${
+                      filtroEtapa === tab.id
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                     }`}
                   >
-                    Enviar Mensagem
+                    {tab.label}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setModoContato("Reunião")}
-                    className={`px-3 py-1 rounded-md ${
-                      modoContato === "Reunião"
-                        ? "bg-white text-slate-900 shadow-xs"
-                        : "text-slate-600"
-                    }`}
-                  >
-                    Marcar Reunião
-                  </button>
+                ))}
+              </div>
+
+              {orcamentosVisiveis.length === 0 ? (
+                <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center space-y-2 bg-slate-50/70">
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    {temVisaoGlobal
+                      ? "Nenhum orçamento registrado nesta visão ainda. Crie um orçamento ao lado, abra a REQ para aprovação e emita a PO."
+                      : "Nenhum orçamento ou PO registrado para a sua conta ainda. Assim que o colaborador da Atlas Supply emitir, aparecerá aqui."}
+                  </p>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Etapa do Processo de Compras
-                  </label>
-                  <select
-                    value={etapaProcesso}
-                    onChange={(e) => setEtapaProcesso(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
-                  >
-                    <option value="Qualificação Inicial (RFI)">
-                      Qualificação Inicial (RFI)
-                    </option>
-                    <option value="Cotação de Preço (RFQ)">
-                      Cotação de Preço (RFQ)
-                    </option>
-                    <option value="Proposta Completa (RFP)">
-                      Proposta Completa (RFP)
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    E-mail para Convite / Contato
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={emailDestinatario}
-                    onChange={(e) => setEmailDestinatario(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Assunto / Pauta
-                </label>
-                <input
-                  type="text"
-                  value={assunto}
-                  onChange={(e) => setAssunto(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                />
-              </div>
-
-              {modoContato === "Reunião" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Data da Reunião
-                    </label>
-                    <input
-                      type="date"
-                      value={dataReuniao}
-                      onChange={(e) => setDataReuniao(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                      Horário
-                    </label>
-                    <input
-                      type="time"
-                      value={horaReuniao}
-                      onChange={(e) => setHoraReuniao(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  {modoContato === "Mensagem"
-                    ? "Mensagem para o Fornecedor"
-                    : "Detalhes / Pauta do Convite de Reunião"}
-                </label>
-                <textarea
-                  rows={4}
-                  value={mensagemTexto}
-                  onChange={(e) => setMensagemTexto(e.target.value)}
-                  placeholder="Descreve os pontos da conversa, contrato, impostos (ICMS/IPI/ISS) ou proposta..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-colors"
-                >
-                  {modoContato === "Mensagem"
-                    ? "Registar Mensagem no Portal"
-                    : "Registar Convite no Portal"}
-                </button>
-                <a
-                  href={montarMailtoHref()}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm text-center transition-colors"
-                >
-                  ✉️ Enviar Convite por E-mail
-                </a>
-              </div>
-            </form>
-
-            <div className="lg:col-span-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-              <h2 className="text-base font-bold text-slate-900">
-                Mensagens e Convites Registados ({registrosContato.length})
-              </h2>
-              {registrosContato.length === 0 ? (
-                <EstadoVazioIlustracao mensagem="Nenhuma mensagem ou reunião registada ainda. Usa o formulário ao lado para registar ou disparar o convite por e-mail." />
               ) : (
                 <div className="space-y-3">
-                  {registrosContato.map((reg) => (
+                  {orcamentosVisiveis.map((orc) => (
                     <div
-                      key={reg.id}
-                      className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1.5"
+                      key={orc.id}
+                      className="rounded-xl border border-slate-200 p-4 space-y-3 bg-white"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">
-                          [{reg.tipo}] {reg.fornecedorNome} • {reg.etapaProcesso}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {reg.criadoEm}
-                        </span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-900 bg-slate-200/80 px-2 py-0.5 rounded">
+                              {orc.id}
+                            </span>
+
+                            {orc.numeroRequisicao && (
+                              <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                                {orc.numeroRequisicao}
+                              </span>
+                            )}
+
+                            {orc.numeroPO && (
+                              <span className="text-xs font-bold text-emerald-950 bg-emerald-200 border border-emerald-400 px-2 py-0.5 rounded">
+                                {orc.numeroPO}
+                              </span>
+                            )}
+
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                orc.etapaFluxo === "PO Emitida (Aprovado)"
+                                  ? "bg-emerald-600 text-white"
+                                  : orc.etapaFluxo === "Em Aprovacao (REQ)"
+                                  ? "bg-amber-500 text-slate-950"
+                                  : orc.etapaFluxo === "Orcamento Criado"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-rose-100 text-rose-800"
+                              }`}
+                            >
+                              {orc.etapaFluxo}
+                            </span>
+                          </div>
+
+                          <p className="text-sm font-bold text-slate-900 pt-0.5">
+                            {orc.fornecedorNome}
+                          </p>
+                          <p className="text-xs text-slate-600">
+                            {orc.itemNome} • Qtd:{" "}
+                            <strong>{orc.quantidade}</strong> •{" "}
+                            {orc.modalidade} ({orc.prazoPagamento})
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Aberto por: {orc.origem} • {orc.criadoEm}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-base font-bold text-emerald-700">
+                            {formatarMoeda(orc.totalNf)}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Impostos: {formatarMoeda(orc.cargaTributaria)}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs font-semibold text-blue-700">
-                        {reg.assuntoOuData}
-                      </p>
-                      <p className="text-sm text-slate-700">{reg.detalhes}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Para: {reg.destinatario} ({reg.emailDestino})
-                      </p>
+
+                      {/* Barra das 3 Etapas */}
+                      <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+                        <div className="rounded-lg px-2.5 py-1.5 bg-slate-900 text-white font-semibold">
+                          ✓ 1. {orc.id}
+                        </div>
+                        <div
+                          className={`rounded-lg px-2.5 py-1.5 font-semibold ${
+                            orc.numeroRequisicao
+                              ? "bg-amber-100 text-amber-950 border border-amber-300"
+                              : "bg-slate-100 text-slate-400"
+                          }`}
+                        >
+                          {orc.numeroRequisicao
+                            ? `2. ${orc.numeroRequisicao}`
+                            : "2. REQ pendente"}
+                        </div>
+                        <div
+                          className={`rounded-lg px-2.5 py-1.5 font-semibold ${
+                            orc.numeroPO
+                              ? "bg-emerald-600 text-white"
+                              : "bg-slate-100 text-slate-400"
+                          }`}
+                        >
+                          {orc.numeroPO
+                            ? `✓ 3. ${orc.numeroPO}`
+                            : "3. PO pendente"}
+                        </div>
+                      </div>
+
+                      {orc.alcadaAprovacao && (
+                        <div className="bg-amber-50/80 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-950 space-y-0.5">
+                          <p>
+                            <strong>Requisição {orc.numeroRequisicao}:</strong>{" "}
+                            Aprovação em andamento • Responsáveis:{" "}
+                            <strong>{orc.alcadaAprovacao}</strong>
+                          </p>
+                          {orc.requisicaoGeradaEm && (
+                            <p className="text-[11px] text-amber-800">
+                              Aberta em {orc.requisicaoGeradaEm}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {orc.numeroPO && (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-2 text-xs text-emerald-950 space-y-0.5">
+                          <p>
+                            <strong>PO Gerada:</strong>{" "}
+                            <span className="font-bold">{orc.numeroPO}</span> •{" "}
+                            <span className="font-semibold text-emerald-800">
+                              Pronta para inserir na NF-e emitida
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-emerald-800">
+                            Aprovada por {orc.aprovadoPor} em {orc.poEmitidaEm}
+                          </p>
+                        </div>
+                      )}
+
+                      {orc.contestacaoFornecedor && (
+                        <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-950 space-y-0.5">
+                          <p className="font-bold">
+                            Contestação do Fornecedor:{" "}
+                            {orc.contestacaoFornecedor.motivo}
+                          </p>
+                          <p>{orc.contestacaoFornecedor.detalhes}</p>
+                          <p className="text-[11px] text-amber-800">
+                            Registrada em {orc.contestacaoFornecedor.registradoEm}
+                          </p>
+                        </div>
+                      )}
+
+                      {orc.motivoReprovacao && (
+                        <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+                          {orc.motivoReprovacao}
+                        </p>
+                      )}
+
+                      {orc.comprovanteNome && (
+                        <p className="text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                          Documento: <strong>{orc.comprovanteNome}</strong>
+                        </p>
+                      )}
+
+                      {orc.observacoes && (
+                        <p className="text-xs text-slate-600 italic">
+                          “{orc.observacoes}”
+                        </p>
+                      )}
+
+                      {/* Ações do Colaborador & ADM */}
+                      {temVisaoGlobal && (
+                        <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {(orc.etapaFluxo === "Orcamento Criado" ||
+                              orc.etapaFluxo === "Reprovado") && (
+                              <button
+                                type="button"
+                                onClick={() => gerarRequisicao(orc)}
+                                className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                1. Abrir REQ para Aprovação →
+                              </button>
+                            )}
+
+                            {orc.etapaFluxo === "Em Aprovacao (REQ)" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => aprovarEEmitirPO(orc)}
+                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  ✓ Aprovar &amp; Gerar PO
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => reprovarRequisicao(orc)}
+                                  className="px-3.5 py-1.5 rounded-lg border border-rose-300 hover:bg-rose-50 text-rose-700 text-xs font-semibold transition-colors cursor-pointer"
+                                >
+                                  Devolver / Reprovar
+                                </button>
+                              </>
+                            )}
+
+                            {orc.etapaFluxo === "PO Emitida (Aprovado)" &&
+                              orc.numeroPO && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    copiarTexto(
+                                      `${orc.numeroPO} (${orc.numeroRequisicao} / ${orc.id})`,
+                                      "Número da PO"
+                                    )
+                                  }
+                                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors cursor-pointer"
+                                >
+                                  Copiar Nº da PO ({orc.numeroPO})
+                                </button>
+                              )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => cancelarOuReabrir(orc)}
+                            className="text-xs font-semibold text-slate-500 hover:text-slate-900 underline cursor-pointer"
+                          >
+                            {orc.etapaFluxo === "Cancelado"
+                              ? "Reabrir processo"
+                              : "Cancelar"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Ações do Fornecedor: Copiar PO para NF-e e Contestar */}
+                      {perfil === "fornecedor" && (
+                        <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {orc.numeroPO && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copiarTexto(
+                                    orc.numeroPO!,
+                                    "Número da PO para NF-e"
+                                  )
+                                }
+                                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                              >
+                                Copiar PO p/ NF-e ({orc.numeroPO})
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                abrirModalFornecedor("Contestação", orc)
+                              }
+                              className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-950 text-xs font-semibold cursor-pointer"
+                            >
+                              Contestar este orçamento
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
           </div>
-        )}
+        </div>
       </main>
+
+      {/* Modal de Mensagem / Ajuda / Contestação / Reunião */}
+      {modalMensagemAberto && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">
+                  {perfil === "fornecedor"
+                    ? `Destino: ${COLABORADOR_RESPONSAVEL.email}`
+                    : `Canal Direto • ${fornecedorAtual.nome}`}
+                </p>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {tipoContato === "Contestação"
+                    ? "Registrar Contestação"
+                    : tipoContato === "Ajuda"
+                    ? "Central de Ajuda ao Fornecedor"
+                    : "Mensagem ou Solicitação de Reunião"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalMensagemAberto(false)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <form onSubmit={handleEnviarMensagem} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Tipo de contato
+                  </label>
+                  <select
+                    value={tipoContato}
+                    onChange={(e) =>
+                      setTipoContato(
+                        e.target.value as
+                          | "Mensagem"
+                          | "Solicitação de Reunião"
+                          | "Contestação"
+                          | "Ajuda"
+                      )
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                  >
+                    {perfil === "fornecedor" ? (
+                      <>
+                        <option>Contestação</option>
+                        <option>Ajuda</option>
+                        <option>Mensagem</option>
+                      </>
+                    ) : (
+                      <>
+                        <option>Solicitação de Reunião</option>
+                        <option>Mensagem</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                {perfil === "fornecedor" && tipoContato === "Contestação" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Orçamento / PO contestado
+                    </label>
+                    <select
+                      value={orcamentoAlvoId}
+                      onChange={(e) => setOrcamentoAlvoId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                    >
+                      <option value="">Selecione um registro...</option>
+                      {orcamentosVisiveis.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.id}
+                          {o.numeroPO ? ` • ${o.numeroPO}` : ""} (
+                          {formatarMoeda(o.totalNf)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {tipoContato === "Solicitação de Reunião" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Data / Horário sugerido
+                    </label>
+                    <input
+                      type="text"
+                      value={dataReuniao}
+                      onChange={(e) => setDataReuniao(e.target.value)}
+                      placeholder="Ex.: Quinta-feira às 14h30"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Assunto
+                </label>
+                <input
+                  type="text"
+                  value={assuntoContato}
+                  onChange={(e) => setAssuntoContato(e.target.value)}
+                  placeholder={
+                    perfil === "fornecedor"
+                      ? "Ex.: Divergência no prazo de pagamento ou alíquota de imposto"
+                      : "Ex.: Liberação de PO e janela de entrega"
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Mensagem / Detalhes
+                </label>
+                <textarea
+                  rows={3}
+                  value={textoContato}
+                  onChange={(e) => setTextoContato(e.target.value)}
+                  placeholder="Escreva o motivo da contestação, dúvida de NF-e ou alinhamento..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+              >
+                Registrar envio (simulação)
+              </button>
+            </form>
+
+            {mensagensDoFornecedor.length > 0 && (
+              <div className="pt-3 border-t border-slate-100 space-y-2 max-h-44 overflow-y-auto">
+                <p className="text-[11px] font-semibold uppercase text-slate-400">
+                  Histórico recente ({mensagensDoFornecedor.length})
+                </p>
+                {mensagensDoFornecedor.map((m) => (
+                  <div
+                    key={m.id}
+                    className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs space-y-1"
+                  >
+                    <div className="flex justify-between font-semibold text-slate-800">
+                      <span>
+                        {m.tipo}: {m.assunto}
+                      </span>
+                      <span className="text-slate-400">{m.criadoEm}</span>
+                    </div>
+                    {m.dataReuniao && (
+                      <p className="text-[11px] text-blue-700 font-medium">
+                        Sugestão de agenda: {m.dataReuniao}
+                      </p>
+                    )}
+                    <p className="text-slate-600">{m.conteudo}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function OperacoesPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm">A carregar...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center text-sm text-slate-600">
+          Carregando painel operacional da Atlas Supply &amp; Comércio...
+        </div>
+      }
+    >
       <OperacoesConteudo />
     </Suspense>
   );
