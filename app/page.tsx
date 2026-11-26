@@ -49,9 +49,9 @@ export default function HomePage() {
         <img
           src="/images/parceria-comercial.jpg"
           alt="Operações corporativas Atlas Supply"
-          className="absolute inset-0 w-full h-full object-cover object-center opacity-20 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover object-center opacity-45 brightness-110 pointer-events-none"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/90 to-slate-950 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/75 to-slate-950/95 pointer-events-none" />
 
         <div className="relative z-10 max-w-6xl mx-auto w-full space-y-12">
           {/* Texto Principal */}
