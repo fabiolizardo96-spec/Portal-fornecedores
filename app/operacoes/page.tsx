@@ -13,6 +13,15 @@ type EtapaFluxoCompra =
   | "Reprovado"
   | "Cancelado";
 
+interface AreaCorporativa {
+  id: string;
+  nome: string;
+  costCenterPadrao: string;
+  spendCategoryPadrao: string;
+  requisitantes: string[];
+  aprovadorArea: string;
+}
+
 interface ItemFornecedor {
   id: string;
   nome: string;
@@ -49,6 +58,11 @@ interface OrcamentoRegistro {
   id: string;
   fornecedorId: string;
   fornecedorNome: string;
+  areaSolicitante: string;
+  requisitanteNome: string;
+  costCenter: string;
+  spendCategory: string;
+  aprovadorArea: string;
   itemNome: string;
   ncm: string;
   quantidade: number;
@@ -97,6 +111,95 @@ interface MensagemRegistro {
   conteudo: string;
   criadoEm: string;
 }
+
+const AREAS_CORPORATIVAS: AreaCorporativa[] = [
+  {
+    id: "operacoes",
+    nome: "Operações & Produção Industrial",
+    costCenterPadrao: "CC-101 • Produção & Manufatura",
+    spendCategoryPadrao: "Matéria-Prima & Insumos Diretos",
+    requisitantes: ["Camila Rocha", "Diego Martins", "Felipe Tavares"],
+    aprovadorArea: "Rogério Tavares (Gerente de Operações)",
+  },
+  {
+    id: "logistica",
+    nome: "Logística, Armazenagem & Distribuição",
+    costCenterPadrao: "CC-102 • Logística & Distribuição",
+    spendCategoryPadrao: "Frete, Logística & Comex",
+    requisitantes: ["Patrícia Alves", "Thiago Ferreira", "Aline Castro"],
+    aprovadorArea: "Sônia Menezes (Coordenadora de Logística)",
+  },
+  {
+    id: "comex",
+    nome: "Comércio Exterior (Comex) & Importação/Exportação",
+    costCenterPadrao: "CC-103 • Comex & Operações Aduaneiras",
+    spendCategoryPadrao: "Frete, Logística & Comex",
+    requisitantes: ["Beatriz Ramos", "Caio Nogueira", "Marina Peixoto"],
+    aprovadorArea: "Eduardo Vasconcelos (Head de Comex)",
+  },
+  {
+    id: "ti",
+    nome: "Tecnologia da Informação (TI) & Sistemas",
+    costCenterPadrao: "CC-104 • TI & Sistemas",
+    spendCategoryPadrao: "TI, Software & Infraestrutura",
+    requisitantes: ["Rafael Souza", "Juliana Lima", "Lucas Mendes"],
+    aprovadorArea: "Andréia Campos (Gerente de TI)",
+  },
+  {
+    id: "facilities",
+    nome: "Manutenção & Facilities / Predial",
+    costCenterPadrao: "CC-105 • Facilities & Predial",
+    spendCategoryPadrao: "Manutenção, Predial & Facilities",
+    requisitantes: ["Marcos Oliveira", "Vanessa Duarte", "Rodrigo Paiva"],
+    aprovadorArea: "Cláudio Ribeiro (Supervisor de Facilities)",
+  },
+  {
+    id: "marketing-comercial",
+    nome: "Marketing, Comercial & Trade",
+    costCenterPadrao: "CC-106 • Comercial & Marketing",
+    spendCategoryPadrao: "Marketing, Eventos & Material Promocional",
+    requisitantes: ["Larissa Prado", "Gustavo Costa", "Bianca Soares"],
+    aprovadorArea: "Priscila Teixeira (Gerente Comercial & Trade)",
+  },
+  {
+    id: "rh-admin",
+    nome: "Recursos Humanos (RH) & Administrativo",
+    costCenterPadrao: "CC-107 • RH & Administrativo",
+    spendCategoryPadrao: "Administrativo & Consumo Geral",
+    requisitantes: ["Fernanda Reis", "Bruno Carvalho", "Paula Azevedo"],
+    aprovadorArea: "Mônica Guedes (Gerente de RH & Admin)",
+  },
+  {
+    id: "financeiro-juridico",
+    nome: "Financeiro, Controladoria & Jurídico",
+    costCenterPadrao: "CC-108 • Financeiro & Controladoria",
+    spendCategoryPadrao: "Serviços Profissionais & Consultoria",
+    requisitantes: ["Alan Moreira", "Tatiane Pinto", "Vinícius Macedo"],
+    aprovadorArea: "Henrique Cavalcanti (Controller / Financeiro)",
+  },
+];
+
+const COST_CENTERS = [
+  "CC-101 • Produção & Manufatura",
+  "CC-102 • Logística & Distribuição",
+  "CC-103 • Comex & Operações Aduaneiras",
+  "CC-104 • TI & Sistemas",
+  "CC-105 • Facilities & Predial",
+  "CC-106 • Comercial & Marketing",
+  "CC-107 • RH & Administrativo",
+  "CC-108 • Financeiro & Controladoria",
+];
+
+const SPEND_CATEGORIES = [
+  "Matéria-Prima & Insumos Diretos",
+  "Embalagens & Expedição",
+  "Frete, Logística & Comex",
+  "Manutenção, Predial & Facilities",
+  "TI, Software & Infraestrutura",
+  "Serviços Profissionais & Consultoria",
+  "Marketing, Eventos & Material Promocional",
+  "Administrativo & Consumo Geral",
+];
 
 const COLABORADOR_RESPONSAVEL = {
   nome: "Lucas Andrade — Comprador Pleno (Atlas Supply)",
@@ -419,6 +522,37 @@ function OperacoesConteudo() {
     FORNECEDORES_INICIAIS[0].id
   );
 
+  // Área Requisitante, Cost Center, Spend Category e Aprovadores
+  const [areaId, setAreaId] = useState<string>(AREAS_CORPORATIVAS[0].id);
+  const areaAtual = useMemo(
+    () =>
+      AREAS_CORPORATIVAS.find((a) => a.id === areaId) || AREAS_CORPORATIVAS[0],
+    [areaId]
+  );
+  const [requisitanteNome, setRequisitanteNome] = useState<string>(
+    AREAS_CORPORATIVAS[0].requisitantes[0]
+  );
+  const [costCenter, setCostCenter] = useState<string>(
+    AREAS_CORPORATIVAS[0].costCenterPadrao
+  );
+  const [spendCategory, setSpendCategory] = useState<string>(
+    AREAS_CORPORATIVAS[0].spendCategoryPadrao
+  );
+  const [aprovadorArea, setAprovadorArea] = useState<string>(
+    AREAS_CORPORATIVAS[0].aprovadorArea
+  );
+
+  function handleTrocarArea(novaAreaId: string) {
+    setAreaId(novaAreaId);
+    const encontrada = AREAS_CORPORATIVAS.find((a) => a.id === novaAreaId);
+    if (encontrada) {
+      setRequisitanteNome(encontrada.requisitantes[0]);
+      setCostCenter(encontrada.costCenterPadrao);
+      setSpendCategory(encontrada.spendCategoryPadrao);
+      setAprovadorArea(encontrada.aprovadorArea);
+    }
+  }
+
   // Filtros da carteira de fornecedores (ADM & Colaborador)
   const [buscaFornecedor, setBuscaFornecedor] = useState("");
   const [filtroUf, setFiltroUf] = useState("TODOS");
@@ -646,7 +780,7 @@ function OperacoesConteudo() {
     fornecedorAtual.regimeTributario,
   ]);
 
-  // ETAPA 1 (Exclusiva de Colaborador & ADM): Criar Orçamento
+  // ETAPA 1 (Exclusiva de Colaborador & ADM): Criar Orçamento com Área, Cost Center e Spend Category
   function handleGuardarOrcamento(e: React.FormEvent) {
     e.preventDefault();
     if (!temVisaoGlobal) return;
@@ -656,6 +790,11 @@ function OperacoesConteudo() {
       id: novoId,
       fornecedorId: fornecedorAtual.id,
       fornecedorNome: fornecedorAtual.nome,
+      areaSolicitante: areaAtual.nome,
+      requisitanteNome: requisitanteNome.trim() || areaAtual.requisitantes[0],
+      costCenter,
+      spendCategory,
+      aprovadorArea,
       itemNome: itemSelecionado.nome,
       ncm: itemSelecionado.ncm,
       quantidade: Math.max(1, Number(quantidade) || 1),
@@ -685,11 +824,11 @@ function OperacoesConteudo() {
     setObservacoes("");
     setComprovanteNome(null);
     notificar(
-      `Orçamento ${novoId} criado para ${fornecedorAtual.nome}. Agora abra a Requisição (REQ) para aprovação.`
+      `Orçamento ${novoId} criado para ${areaAtual.nome} (${costCenter} • ${spendCategory}).`
     );
   }
 
-  // ETAPA 2 (Exclusiva de Colaborador & ADM): Abrir Requisição de Compra (REQ)
+  // ETAPA 2 (Exclusiva de Colaborador & ADM): Abrir Requisição de Compra (REQ) com Alçada
   function gerarRequisicao(orcamento: OrcamentoRegistro) {
     if (!temVisaoGlobal) return;
     const numReq = `REQ-2026-${seqRequisicao}`;
@@ -697,10 +836,10 @@ function OperacoesConteudo() {
 
     const alcada =
       orcamento.totalNf > 15000
-        ? "Diretoria Executiva & Owner (Alçada Máxima)"
+        ? `${orcamento.aprovadorArea} + Henrique Cavalcanti (Controller) + Fabio Lizardo (ADM & Owner)`
         : orcamento.totalNf > 5000
-        ? "Gerência de Suprimentos & Controladoria"
-        : "Coordenação de Compras";
+        ? `${orcamento.aprovadorArea} + Controladoria / Suprimentos`
+        : `${orcamento.aprovadorArea} (Aprovação da Área)`;
 
     setOrcamentos((prev) =>
       prev.map((o) =>
@@ -718,7 +857,7 @@ function OperacoesConteudo() {
     );
 
     notificar(
-      `Requisição ${numReq} aberta! Aprovação em andamento com ${alcada}.`
+      `Requisição ${numReq} aberta (${orcamento.areaSolicitante})! Aprovação com ${alcada}.`
     );
   }
 
@@ -731,7 +870,7 @@ function OperacoesConteudo() {
     const aprovadorAssinatura =
       perfil === "adm"
         ? `Fabio Lizardo — ADM & Owner (${usuarioExibido})`
-        : `Mesa de Compras (${usuarioExibido})`;
+        : `${orcamento.aprovadorArea} / Mesa de Compras`;
 
     setOrcamentos((prev) =>
       prev.map((o) =>
@@ -760,8 +899,7 @@ function OperacoesConteudo() {
           ? {
               ...o,
               etapaFluxo: "Reprovado",
-              motivoReprovacao:
-                "Devolvido pelos responsáveis de aprovação para revisão.",
+              motivoReprovacao: `Devolvido por ${orcamento.aprovadorArea} para revisão de escopo/orçamento.`,
             }
           : o
       )
@@ -803,7 +941,7 @@ function OperacoesConteudo() {
         perfil === "adm"
           ? `Fabio Lizardo — ADM & Owner (${usuarioExibido})`
           : perfil === "colaborador"
-          ? `Mesa de Compras (${usuarioExibido})`
+          ? `${requisitanteNome} • ${areaAtual.nome} (${usuarioExibido})`
           : `${fornecedorAtual.contatoNome} — ${fornecedorAtual.nome}`,
       tipo: tipoContato,
       assunto: assuntoContato.trim(),
@@ -813,7 +951,11 @@ function OperacoesConteudo() {
       criadoEm: hora,
     };
 
-    if (perfil === "fornecedor" && tipoContato === "Contestação" && orcamentoAlvoId) {
+    if (
+      perfil === "fornecedor" &&
+      tipoContato === "Contestação" &&
+      orcamentoAlvoId
+    ) {
       setOrcamentos((prev) =>
         prev.map((o) =>
           o.id === orcamentoAlvoId
@@ -917,7 +1059,7 @@ function OperacoesConteudo() {
               {perfil === "adm"
                 ? "Perfil: ADM & Owner • Governança Total"
                 : perfil === "colaborador"
-                ? "Perfil: Colaborador (Mesa de Compras)"
+                ? "Perfil: Colaborador (Todas as Áreas & Compras)"
                 : "Perfil: Fornecedor Parceiro"}
             </span>
             <span className="text-stone-400">({usuarioExibido})</span>
@@ -955,14 +1097,14 @@ function OperacoesConteudo() {
               {perfil === "adm"
                 ? "GOVERNANÇA EXECUTIVA & OWNER • VISIBILIDADE IRRESTRITA DE TODA A REDE"
                 : perfil === "colaborador"
-                ? "MESA DE COMPRAS • 1. ABRE REQ → 2. APROVAÇÃO → 3. PO PARA NF-E"
+                ? "SOLICITAÇÃO POR ÁREA • COST CENTER & SPEND CATEGORY • REQ → APROVAÇÃO → PO"
                 : "PORTAL DO FORNECEDOR • ORÇAMENTO, PO PARA NF-E, DOCUMENTOS & CONTESTAÇÃO"}
             </p>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5">
               {perfil === "adm"
                 ? "Painel ADM & Owner — Carteira Global, Requisições (REQ) e POs"
                 : perfil === "colaborador"
-                ? "Operações de Compras — Requisição (REQ), Aprovação e Emissão de PO"
+                ? "Operações & Requisições por Área — Cost Center, Spend Category e PO"
                 : "Portal do Fornecedor — Orçamentos, PO para NF-e e Contestação"}
             </h1>
           </div>
@@ -1026,12 +1168,14 @@ function OperacoesConteudo() {
                 </span>
                 <span className="text-xs text-stone-300">
                   Fabio Lizardo • Visibilidade total sobre{" "}
-                  <strong>{fornecedores.length} fornecedores</strong> e aprovações
+                  <strong>{fornecedores.length} fornecedores</strong>,{" "}
+                  <strong>{AREAS_CORPORATIVAS.length} áreas</strong> e aprovações
                 </span>
               </div>
               <p className="text-xs text-stone-300">
-                Selecione qualquer fornecedor para auditar cotações, abrir REQ,
-                aprovar POs e acompanhar contestações enviadas por fornecedores.
+                Selecione qualquer fornecedor e área para auditar cotações, abrir
+                REQ, aprovar POs e acompanhar contestações enviadas por
+                fornecedores.
               </p>
             </div>
 
@@ -1075,8 +1219,8 @@ function OperacoesConteudo() {
               </p>
               <p className="text-[11px] text-slate-500">
                 As cotações e REQs são abertas pela equipe da Atlas Supply.
-                Aqui você acompanha orçamentos, POs aprovadas para emitir sua NF-e,
-                documentos e pode contestar qualquer condição.
+                Aqui você acompanha orçamentos, POs aprovadas para emitir sua
+                NF-e, documentos e pode contestar qualquer condição.
               </p>
             </div>
 
@@ -1313,11 +1457,11 @@ function OperacoesConteudo() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
-                    Novo Orçamento (Cotação de Preço — RFQ)
+                    Novo Orçamento &amp; Solicitação (RFQ / REQ)
                   </h2>
                   <p className="text-xs text-slate-500">
-                    1. Guarde o orçamento → 2. Abra a REQ para aprovação → 3.
-                    Emita a PO para a NF-e.
+                    Escolha a área solicitante, Cost Center e Spend Category →
+                    abra a REQ → aprove e emita a PO.
                   </p>
                 </div>
                 <span className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
@@ -1326,6 +1470,100 @@ function OperacoesConteudo() {
               </div>
 
               <form onSubmit={handleGuardarOrcamento} className="space-y-4">
+                {/* Bloco de Área Solicitante, Requisitante, Cost Center e Spend Category */}
+                <div className="bg-amber-50/60 border border-amber-200/90 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                      Requisitante da Área, Cost Center &amp; Spend Category
+                    </span>
+                    <span className="text-[11px] font-semibold text-amber-800">
+                      {AREAS_CORPORATIVAS.length} áreas ativas
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                        ÁREA REQUISITANTE
+                      </label>
+                      <select
+                        value={areaAtual.id}
+                        onChange={(e) => handleTrocarArea(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      >
+                        {AREAS_CORPORATIVAS.map((ar) => (
+                          <option key={ar.id} value={ar.id}>
+                            {ar.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                        COLABORADOR REQUISITANTE
+                      </label>
+                      <select
+                        value={requisitanteNome}
+                        onChange={(e) => setRequisitanteNome(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      >
+                        {areaAtual.requisitantes.map((reqNome) => (
+                          <option key={reqNome} value={reqNome}>
+                            {reqNome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                        COST CENTER (CENTRO DE CUSTO)
+                      </label>
+                      <select
+                        value={costCenter}
+                        onChange={(e) => setCostCenter(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      >
+                        {COST_CENTERS.map((cc) => (
+                          <option key={cc} value={cc}>
+                            {cc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                        SPEND CATEGORY (CATEGORIA DE GASTO)
+                      </label>
+                      <select
+                        value={spendCategory}
+                        onChange={(e) => setSpendCategory(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      >
+                        {SPEND_CATEGORIES.map((sc) => (
+                          <option key={sc} value={sc}>
+                            {sc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+                        APROVADOR RESPONSÁVEL DA ÁREA
+                      </label>
+                      <input
+                        type="text"
+                        value={aprovadorArea}
+                        onChange={(e) => setAprovadorArea(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     ITEM OFERTADO PARA A EMPRESA
@@ -1604,7 +1842,7 @@ function OperacoesConteudo() {
               </form>
             </section>
           ) : (
-            /* COLUNA ESQUERDA DO FORNECEDOR: Documentos, Contato do Colaborador, Ajuda e Contestação */
+            /* COLUNA ESQUERDA DO FORNECEDOR */
             <section className="lg:col-span-5 bg-white/95 backdrop-blur-xs rounded-2xl border border-emerald-200 p-5 sm:p-6 shadow-sm space-y-4">
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
@@ -1621,7 +1859,7 @@ function OperacoesConteudo() {
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
-                <p className="font-bold text-slate-900 uppercase text-[11px] tracking-wider text-slate-500">
+                <p className="font-bold uppercase text-[11px] tracking-wider text-slate-500">
                   Contato do Colaborador Responsável
                 </p>
                 <p className="text-sm font-bold text-slate-900">
@@ -1938,7 +2176,7 @@ function OperacoesConteudo() {
                 <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center space-y-2 bg-slate-50/70">
                   <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                     {temVisaoGlobal
-                      ? "Nenhum orçamento registrado nesta visão ainda. Crie um orçamento ao lado, abra a REQ para aprovação e emita a PO."
+                      ? "Nenhum orçamento registrado nesta visão ainda. Selecione a área, Cost Center e Spend Category, crie o orçamento, abra a REQ e emita a PO."
                       : "Nenhum orçamento ou PO registrado para a sua conta ainda. Assim que o colaborador da Atlas Supply emitir, aparecerá aqui."}
                   </p>
                 </div>
@@ -1991,6 +2229,18 @@ function OperacoesConteudo() {
                             <strong>{orc.quantidade}</strong> •{" "}
                             {orc.modalidade} ({orc.prazoPagamento})
                           </p>
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            <span className="text-[11px] font-semibold bg-slate-100 text-slate-800 px-2 py-0.5 rounded">
+                              Área: {orc.areaSolicitante} ({orc.requisitanteNome}
+                              )
+                            </span>
+                            <span className="text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-950 px-2 py-0.5 rounded">
+                              {orc.costCenter}
+                            </span>
+                            <span className="text-[11px] font-semibold bg-blue-50 border border-blue-200 text-blue-950 px-2 py-0.5 rounded">
+                              Spend: {orc.spendCategory}
+                            </span>
+                          </div>
                           <p className="text-[11px] text-slate-400">
                             Aberto por: {orc.origem} • {orc.criadoEm}
                           </p>
@@ -2159,7 +2409,7 @@ function OperacoesConteudo() {
                         </div>
                       )}
 
-                      {/* Ações do Fornecedor: Copiar PO para NF-e e Contestar */}
+                      {/* Ações do Fornecedor */}
                       {perfil === "fornecedor" && (
                         <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -2182,7 +2432,7 @@ function OperacoesConteudo() {
                               onClick={() =>
                                 abrirModalFornecedor("Contestação", orc)
                               }
-                              className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-950 text-xs font-semibold cursor-pointer"
+                              className="px-3.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-950 text-xs font-semibold cursor-pointer"
                             >
                               Contestar este orçamento
                             </button>
