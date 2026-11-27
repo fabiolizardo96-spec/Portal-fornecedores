@@ -23,7 +23,7 @@ export default function HomePage() {
 
           <nav className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-semibold">
             <Link
-              href="/acesso?tipo=empresas"
+              href="/empresas"
               className="text-indigo-300 hover:text-indigo-200 bg-indigo-500/15 border border-indigo-400/30 px-3 py-1.5 rounded-lg transition-colors"
             >
               Atlas para Empresas
@@ -51,7 +51,7 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section + 4 Portais de Entrada */}
-      <main className="relative flex-1 flex flex-col justify-center py-12 sm:py-16 px-4 sm:px-6 overflow-hidden">
+      <main className="relative flex-1 flex items-center py-12 sm:py-16 px-4 sm:px-6 overflow-hidden">
         <img
           src="/images/parceria-comercial.jpg"
           alt="Operações corporativas Atlas Supply"
@@ -82,7 +82,7 @@ export default function HomePage() {
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {/* Cartão 1: Atlas para Empresas */}
             <Link
-              href="/acesso?tipo=empresas"
+              href="/empresas"
               className="group rounded-2xl bg-gradient-to-b from-indigo-950/90 to-slate-900/95 border border-indigo-400/35 hover:border-indigo-400 p-6 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
             >
               <div className="space-y-3">
@@ -181,78 +181,6 @@ export default function HomePage() {
             </Link>
           </section>
 
-          {/* Seção Dedicada: Atlas para Empresas */}
-          <section className="rounded-3xl bg-slate-900/90 border border-indigo-400/25 p-6 sm:p-8 space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-2xl space-y-2">
-                <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                  SOLUÇÃO CORPORATIVA MULTI-EMPRESA
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                  Atlas para Empresas: o nosso fluxo de compras com os seus
-                  fornecedores.
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  Sua operação não precisa abandonar os parceiros que já conhece.
-                  Importe a carteira atual de fornecedores e contratos da sua
-                  empresa para rodar cotações, alçadas e renovações em um
-                  ambiente exclusivo.
-                </p>
-              </div>
-
-              <Link
-                href="/acesso?tipo=empresas"
-                className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold transition-colors shadow-md"
-              >
-                Solicitar Ambiente Corporativo →
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
-                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
-                  01 • Carteira Própria + Rede Atlas
-                </p>
-                <p className="text-sm font-bold text-white">
-                  Traga seus fornecedores homologados
-                </p>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Cadastre ou importe sua base atual de fornecedores e escolha,
-                  em cada cotação, se deseja cotar apenas com sua base ou
-                  incluir parceiros da Rede Atlas como benchmark.
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
-                <p className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                  02 • Motor Tributário &amp; TCO
-                </p>
-                <p className="text-sm font-bold text-white">
-                  Comparação real pelo custo líquido
-                </p>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Compare propostas de fornecedores do Simples Nacional, Lucro
-                  Presumido e Lucro Real considerando créditos de ICMS, IPI,
-                  PIS/COFINS, DIFAL e frete antes de aprovar a PO.
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
-                <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                  03 • Governança &amp; Forecast 12M
-                </p>
-                <p className="text-sm font-bold text-white">
-                  Controle total de contratos e alçadas
-                </p>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Mapeie vencimentos nos próximos 12 meses, áreas requisitantes,
-                  gestores de contrato e stakeholders para renegociar antes da
-                  renovação automática.
-                </p>
-              </div>
-            </div>
-          </section>
-
           {/* Indicadores Institucionais */}
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/10 text-xs">
             <div>
@@ -290,7 +218,7 @@ export default function HomePage() {
           </span>
           <div className="flex items-center gap-4">
             <Link
-              href="/acesso?tipo=empresas"
+              href="/empresas"
               className="text-indigo-300 hover:text-indigo-200"
             >
               Atlas para Empresas
