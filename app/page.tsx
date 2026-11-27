@@ -21,7 +21,13 @@ export default function HomePage() {
             </div>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-3 text-xs font-semibold">
+          <nav className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-semibold">
+            <Link
+              href="/acesso?tipo=empresas"
+              className="text-indigo-300 hover:text-indigo-200 bg-indigo-500/15 border border-indigo-400/30 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Atlas para Empresas
+            </Link>
             <Link
               href="/acesso?tipo=colaborador"
               className="text-slate-300 hover:text-white px-3 py-1.5 rounded-lg transition-colors"
@@ -44,14 +50,14 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hero Section + 3 Portais de Entrada */}
-      <main className="relative flex-1 flex items-center py-12 sm:py-16 px-4 sm:px-6 overflow-hidden">
+      {/* Hero Section + 4 Portais de Entrada */}
+      <main className="relative flex-1 flex flex-col justify-center py-12 sm:py-16 px-4 sm:px-6 overflow-hidden">
         <img
           src="/images/parceria-comercial.jpg"
           alt="Operações corporativas Atlas Supply"
           className="absolute inset-0 w-full h-full object-cover object-center opacity-45 brightness-110 pointer-events-none"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/75 to-slate-950/95 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/65 via-slate-950/80 to-slate-950 pointer-events-none" />
 
         <div className="relative z-10 max-w-6xl mx-auto w-full space-y-12">
           {/* Texto Principal */}
@@ -64,29 +70,54 @@ export default function HomePage() {
               Gestão integrada de fornecedores, cotações e compras estratégicas.
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+            <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl">
               Conectamos áreas requisitantes, mesa de compras e parceiros
-              homologados em um fluxo único: cotação com inteligência tributária
-              (TCO), aprovação por alçada, emissão de Purchase Order (PO) e
-              governança contratual.
+              homologados em um fluxo único — e levamos toda essa inteligência
+              para empresas que desejam operar suas compras com a própria base
+              de fornecedores.
             </p>
           </div>
 
-          {/* 3 Cartões de Acesso Direto */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Cartão 1: Sou Colaborador */}
+          {/* 4 Cartões de Acesso Direto */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Cartão 1: Atlas para Empresas */}
+            <Link
+              href="/acesso?tipo=empresas"
+              className="group rounded-2xl bg-gradient-to-b from-indigo-950/90 to-slate-900/95 border border-indigo-400/35 hover:border-indigo-400 p-6 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
+            >
+              <div className="space-y-3">
+                <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-indigo-500/25 text-indigo-200">
+                  B2B Enterprise
+                </span>
+                <h2 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors">
+                  Atlas para Empresas
+                </h2>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Implante o fluxo P2P, cálculo tributário (TCO) e Forecast de
+                  Contratos da Atlas na sua empresa usando os seus próprios
+                  fornecedores.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 flex items-center justify-between text-xs font-bold text-indigo-300 group-hover:text-indigo-200">
+                <span>Implantar na minha empresa</span>
+                <span>→</span>
+              </div>
+            </Link>
+
+            {/* Cartão 2: Sou Colaborador */}
             <Link
               href="/acesso?tipo=colaborador"
-              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-blue-500/60 p-6 sm:p-7 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
+              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-blue-500/60 p-6 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
             >
               <div className="space-y-3">
                 <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300">
                   Acesso Interno
                 </span>
-                <h2 className="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">
+                <h2 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
                   Sou Colaborador
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Acesse a mesa de compras, simule carga tributária e TCO, abra
                   requisições (REQ), aprove pedidos (PO) e acompanhe o Spend
                   Analysis.
@@ -99,19 +130,19 @@ export default function HomePage() {
               </div>
             </Link>
 
-            {/* Cartão 2: Sou Fornecedor */}
+            {/* Cartão 3: Sou Fornecedor */}
             <Link
               href="/acesso?tipo=fornecedor"
-              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-emerald-500/60 p-6 sm:p-7 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
+              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-emerald-500/60 p-6 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
             >
               <div className="space-y-3">
                 <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300">
                   Parceiro Homologado
                 </span>
-                <h2 className="text-xl font-bold text-white group-hover:text-emerald-300 transition-colors">
+                <h2 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
                   Sou Fornecedor
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Consulte Purchase Orders (PO) aprovadas para emissão de NF-e,
                   baixe anexos comerciais e fale diretamente com o comprador
                   responsável.
@@ -124,19 +155,19 @@ export default function HomePage() {
               </div>
             </Link>
 
-            {/* Cartão 3: Quero me Cadastrar */}
+            {/* Cartão 4: Quero me Cadastrar */}
             <Link
               href="/acesso?tipo=cadastro"
-              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-amber-500/60 p-6 sm:p-7 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
+              className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-amber-500/60 p-6 flex flex-col justify-between gap-6 transition-all hover:-translate-y-0.5 shadow-lg"
             >
               <div className="space-y-3">
                 <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300">
                   Novos Parceiros
                 </span>
-                <h2 className="text-xl font-bold text-white group-hover:text-amber-300 transition-colors">
+                <h2 className="text-lg font-bold text-white group-hover:text-amber-300 transition-colors">
                   Quero me Cadastrar
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Submeta os dados cadastrais e fiscais da sua empresa para
                   iniciar o processo de homologação em operações locais,
                   nacionais ou Comex.
@@ -150,6 +181,78 @@ export default function HomePage() {
             </Link>
           </section>
 
+          {/* Seção Dedicada: Atlas para Empresas */}
+          <section className="rounded-3xl bg-slate-900/90 border border-indigo-400/25 p-6 sm:p-8 space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl space-y-2">
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                  SOLUÇÃO CORPORATIVA MULTI-EMPRESA
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                  Atlas para Empresas: o nosso fluxo de compras com os seus
+                  fornecedores.
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Sua operação não precisa abandonar os parceiros que já conhece.
+                  Importe a carteira atual de fornecedores e contratos da sua
+                  empresa para rodar cotações, alçadas e renovações em um
+                  ambiente exclusivo.
+                </p>
+              </div>
+
+              <Link
+                href="/acesso?tipo=empresas"
+                className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold transition-colors shadow-md"
+              >
+                Solicitar Ambiente Corporativo →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
+                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                  01 • Carteira Própria + Rede Atlas
+                </p>
+                <p className="text-sm font-bold text-white">
+                  Traga seus fornecedores homologados
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Cadastre ou importe sua base atual de fornecedores e escolha,
+                  em cada cotação, se deseja cotar apenas com sua base ou
+                  incluir parceiros da Rede Atlas como benchmark.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
+                <p className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                  02 • Motor Tributário &amp; TCO
+                </p>
+                <p className="text-sm font-bold text-white">
+                  Comparação real pelo custo líquido
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Compare propostas de fornecedores do Simples Nacional, Lucro
+                  Presumido e Lucro Real considerando créditos de ICMS, IPI,
+                  PIS/COFINS, DIFAL e frete antes de aprovar a PO.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-1.5">
+                <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                  03 • Governança &amp; Forecast 12M
+                </p>
+                <p className="text-sm font-bold text-white">
+                  Controle total de contratos e alçadas
+                </p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Mapeie vencimentos nos próximos 12 meses, áreas requisitantes,
+                  gestores de contrato e stakeholders para renegociar antes da
+                  renovação automática.
+                </p>
+              </div>
+            </div>
+          </section>
+
           {/* Indicadores Institucionais */}
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/10 text-xs">
             <div>
@@ -157,9 +260,9 @@ export default function HomePage() {
               <p className="text-slate-400">Cobertura nas 5 regiões do Brasil</p>
             </div>
             <div>
-              <p className="text-xl font-bold text-white">Local &amp; Comex</p>
+              <p className="text-xl font-bold text-white">Multi-Empresa</p>
               <p className="text-slate-400">
-                Operações regionais, importação e exportação
+                Ambiente dedicado para clientes corporativos
               </p>
             </div>
             <div>
@@ -185,12 +288,20 @@ export default function HomePage() {
             © 2026 Atlas Supply &amp; Comércio • Portal de Gestão de
             Fornecedores
           </span>
-          <Link
-            href="/acesso?tipo=colaborador"
-            className="text-slate-300 hover:text-white"
-          >
-            Central de Suporte &amp; Acesso
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/acesso?tipo=empresas"
+              className="text-indigo-300 hover:text-indigo-200"
+            >
+              Atlas para Empresas
+            </Link>
+            <Link
+              href="/acesso?tipo=colaborador"
+              className="text-slate-300 hover:text-white"
+            >
+              Central de Suporte &amp; Acesso
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
